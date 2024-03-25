@@ -1,0 +1,2 @@
+*.h linguist-language=c
+CMakeLists.txt linguist-language=idf

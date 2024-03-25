@@ -1,0 +1,2 @@
+# Realtek Semiconductor Corp. RTL2838 DVB-T 
+SUBSYSTEMS=="usb", ATTRS{idVendor}=="0bda", ATTRS{idProduct}=="2838", MODE:="0666", GROUP="adm", SYMLINK+="rtl_sdr"

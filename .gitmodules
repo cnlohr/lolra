@@ -1,0 +1,6 @@
+[submodule "esp8266/nosdk8266"]
+	path = esp8266/nosdk8266
+	url = https://github.com/cnlohr/nosdk8266
+[submodule "ch32v/ch32v003fun"]
+	path = ch32v/ch32v003fun
+	url = https://github.com/cnlohr/ch32v003fun
