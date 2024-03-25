@@ -140,7 +140,7 @@ Another concern is flash on some systems accesses inconsistently or doesn't work
 
 ## LoRaWAN
 
-LoRa frames are totally encapsulated.  If you wanted, we could stop here.  You could even use a commercial gateway, but without usin LoRaWAN, the frames could not be sent to brokers like The Things Network.  For instance, if you ran a raspberry pi gateway, you could just accept whatever old LoRa frames you wanted, but, we took this a step further by helping the packets get forwarded around the world. LoRaWAN is "end to end" encryption, in that none of your neighbors, or gateways can read the messages.  Though, it is curious - the things network CAN read youe messages because they have the encryption keys.
+LoRa frames are totally encapsulated.  If you wanted, we could stop here.  You could even use a commercial gateway, but without using LoRaWAN, the frames could not be sent to brokers like The Things Network.  For instance, if you ran a raspberry pi gateway, you could just accept whatever old LoRa frames you wanted, but, we took this a step further by helping the packets get forwarded around the world. LoRaWAN is "end to end" encryption, in that none of your neighbors, or gateways can read the messages.  Though, it is curious - the things network CAN read youe messages because they have the encryption keys.
 
 Conveniently, thron call, `GenerateLoRaWANPacket` in [`lib/lorawan_simple.h`](https://github.com/cnlohr/lolra/blob/master/lib/lorawan_simple.h) that handles all of the required encapsulation.  Simply use this function to generate your frames, and broadcast them!
 
