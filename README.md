@@ -240,6 +240,8 @@ For TTGO Lora32, there was a +3dBi antenna added.  For the MikroTik LR9, it used
  * [A more grounded paper on LoRa](https://chrisye-liu.github.io/files/yang22emu.pdf) 
  * [Reversing LoRa by Matt Knight](https://github.com/matt-knight/research/blob/master/2016_05_20_jailbreak/Reversing-Lora-Knight.pdf)
  * [An academic paper on LoRa](https://dl.acm.org/doi/10.1145/3546869)
+ * Brought to my attention after I published, [Everything has its Bad Side and Good Side: Turning Processors to
+Low Overhead Radios Using Side-Channels](https://dl.acm.org/doi/abs/10.1145/3583120.3586959) Accomplished something very similar to this, with an arduino!
 
 ### Software Resources Directly Used
  * [ch32v003fun](https://github.com/cnlohr/ch32v003fun)
