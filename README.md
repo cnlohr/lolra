@@ -6,10 +6,10 @@
  * [Background](#background)
  * [LoRaWAN](#lorawan)
  * [Limitations](#limitations)
- * [Future Work](#future_Work)
+ * [Future Work](#future-work)
  * [Resources](#resources)
- * [Special Thanks](#special_thanks)
- * [Range Tests](#range_tests)
+ * [Special Thanks](#special-thanks)
+ * [Range Tests](#range-tests)
 
 ## Introduction
 
