@@ -16,7 +16,7 @@
 Firmware-only LoRa transmission, for a variety of processors. Send LoRa packets, without any radio, chips, external hardware or built-in radios at all on a variety of common, inexpensive processors. While not truly bit banging, this repository shows how using either a shift register (i.e. I2S or SPI port) or an APLL, you can send LoRa packets that can be decoded by commercial off the shelf LoRa gateways and other chips.
 
 > [!NOTE]
-> This repo is designed for use with ITU Region 2 (The Americas) tageting 902-928MHz. Code changes are needed for use in Region 1 (EU, Russia, Afraica) to target 863-870MHz or Region 3 (Australia, China, India) to target 920-923MHz.
+> This repo is designed for use with ITU Region 2 (The Americas) tageting 902-928MHz. Code changes are needed for use in Region 1 (EU, Russia, Africa) to target 863-870MHz or Region 3 (Australia, China, India) to target 920-923MHz.
 
 > [!CAUTION]
 > Because we rely on harmonics and aliasing, the primary frequency components emitted by your microcontroller are going to be in portions of the RF spectrum where RF transmissions are banned.  Please filter your output or perform your tests in an area where you are unlikely to leak significant RF.  The overall EIRP output is genreally ≪300uW across the whole spectrum spread out over hundreds of emission frequencies, but there is virtually no way a device deliberately transmitting on these frequencies could ever pass FCC part 15 compliance, even with filtering. 
