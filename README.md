@@ -246,7 +246,7 @@ Low Overhead Radios Using Side-Channels](https://dl.acm.org/doi/abs/10.1145/3583
 ### Software Resources Directly Used
  * [ch32v003fun](https://github.com/cnlohr/ch32v003fun)
  * [esputil](https://github.com/cpq/esputil) dependency-free ESP programming
- * [nosdk8266](github.com/cnlohr/nosdk8266)
+ * [nosdk8266](https://github.com/cnlohr/nosdk8266)
 
 ### Hardware
  * [MikroTik LR9](https://mikrotik.com/product/wap_lr9_kit)
