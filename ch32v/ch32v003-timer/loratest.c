@@ -238,6 +238,89 @@ complete:
 }
 #endif
 
+
+
+void LoopFunction()  __attribute__((section(".srodata")));
+
+void LoopFunction()
+{
+	uint8_t * start = (uint8_t*)DMA1_Channel2->MADDR;
+	uint8_t * end = (uint8_t*)((uint32_t)DMA1_Channel2->MADDR + SENDBUFF_WORDS);
+	uint8_t * here = start+ 8;
+	uint32_t targ = 2000;
+	uint32_t running = 0;
+	uint8_t * tail = end - DMA1_Channel2->CNTR;
+	uint32_t * cntr = DMA1_Channel2->CNTR;
+	uint32_t temp = 0;
+	uint32_t temp2 = 0;
+
+	asm volatile("\n\
+	li %[targ], 2000\n\
+genloop:\n\
+	lw %[temp], 0(%[cntr])\n\
+	sub %[tail], %[end], %[temp]\n\
+	beq %[here], %[tail], genloop\n\
+innerloop:\
+	li %[temp], 17\n\
+	blt %[running], %[targ], noskip\n\
+	li %[temp], 18\n\
+	sub %[running], %[running], %[targ]\n\
+noskip:\n\
+	sb %[temp], 0(%[here])\n\
+	addi %[here], %[here], 1\n\
+	bne %[here], %[end], skipreset\n\
+	add %[here], x0, %[start]\n\
+skipreset:\n\
+	bne %[here], %[tail], innerloop\n\
+	j genloop\n\
+" : [here]"+r"(here) :
+	[start]"r"(start),
+	[end]"r"(end),
+	[targ]"r"(targ),
+	[running]"r"(running),
+	[tail]"r"(tail),
+	[cntr]"r"(cntr),
+	[temp]"r"(temp),
+	[temp2]"r"(temp2) );
+
+/*
+	while(1)
+	{
+		int targ_f = 2000; //(frameno & 511)*9 + 1700;
+		int run_f = 0;
+		uint8_t * tail = end - DMA1_Channel2->CNTR;
+
+		while( here != tail )
+		{
+			int setf = 17;
+			if( run_f > targ_f )
+			{
+				setf = 18;
+				run_f -= targ_f;
+			}
+			run_f += setf*32;
+
+			*here = setf;
+
+			here++;
+		}
+*/
+/*
+		for( j = 0; j < sizeof( sendbuff ); j++ )
+		{
+			int setf = 10;
+			if( run_f > targ_f )
+			{
+				setf = 9;
+				run_f -= targ_f;
+			}
+			run_f += setf*32;
+			
+			sendbuff[j] = setf;
+		}
+*/
+}
+
 int main()
 {
 	SystemInit();
@@ -309,11 +392,15 @@ int main()
 	TIM1->CCER |= TIM_CC3E;
 	TIM1->CCER |= TIM_CC1E;
 	
-	TIM1->CHCTLR2 |= TIM_OC3M_2 | TIM_OC3M_1;
-	TIM1->CHCTLR1 |= TIM_OC1M_2 | TIM_OC1M_1;
+	// Compare 3 = for output
+	TIM1->CHCTLR2 = 
+		TIM_OC3M_0 | TIM_OC3M_1;
+
+	// Compare 1 = for triggering
+	TIM1->CHCTLR1 = TIM_OC1M_2 | TIM_OC1M_1;
 	
 	// Set the Capture Compare Register value to 50% initially
-	TIM1->CH3CVR = 6;
+	TIM1->CH3CVR = 7;
 	TIM1->CH1CVR = 0; // This triggers DMA.
 	
 	// Enable TIM1 outputs
@@ -355,28 +442,46 @@ int main()
 	DMA1_Channel2->CFGR |= DMA_CFGR1_EN;
 
 	int frameno = 0;
+//	LoopFunction();
+
+
+	uint32_t * start = (uint8_t*)DMA1_Channel2->MADDR;
+	uint32_t * end = (uint8_t*)((uint32_t)DMA1_Channel2->MADDR + SENDBUFF_WORDS);
+	uint32_t * here = start;
+	uint32_t targ = 2000;
+
+	int run_f = 0;
 	while(1)
 	{
-		//printf( "%08x %08x\n", TIM1->CH3CVR, TIM1->ATRLR );
-		Delay_Ms( 1 );
-		frameno++;
-		int j;
+//XXX GET CREATIVE HOW TO DITHER
+		uint32_t cp = (SysTick->CNT>>16)&0x7ff;
+		int targ_f = cp+37*4*4; //(frameno & 511)*9 + 1700;
+		uint32_t * tail = 0xfffffffc & (uintptr_t)(((uint8_t*)end) - DMA1_Channel2->CNTR);
 
-		int targ_f = (frameno & 127)*3 + 1370;
-		int run_f = 0;
-		for( j = 0; j < sizeof( sendbuff ); j++ )
+		if( tail == end ) tail--;
+
+		while( here != tail )
 		{
-			int setf = 12;
+			uint32_t setf = 0x0a0a0a09;
 			if( run_f > targ_f )
 			{
-				setf = 11;
+				setf = 0x0a0a0a0a;
+				run_f += 37*4*4;
 				run_f -= targ_f;
 			}
-			run_f += setf*16;
-			
-			sendbuff[j] = setf;
+			else
+			{
+				run_f += 36*4*4;
+			}
+
+			*here = setf;
+
+			here++;
+			if( here == end )
+				here = start;
 		}
 	}
+
 
 #if 0
 	uint32_t frame = 0;
