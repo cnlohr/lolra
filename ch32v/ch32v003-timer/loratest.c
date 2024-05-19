@@ -400,7 +400,7 @@ int main()
 	TIM1->CHCTLR1 = TIM_OC1M_2 | TIM_OC1M_1;
 	
 	// Set the Capture Compare Register value to 50% initially
-	TIM1->CH3CVR = 7;
+	TIM1->CH3CVR = 3;
 	TIM1->CH1CVR = 0; // This triggers DMA.
 	
 	// Enable TIM1 outputs
@@ -451,32 +451,33 @@ int main()
 	uint32_t targ = 2000;
 
 	int run_f = 0;
+
+	const uint32_t tablef[] = {
+		0x0a0a0a0a, 
+		0x0a0a0a0b, 
+		0x0a0b0a0b, 
+		0x0b0b0b0a, 
+		0x0b0b0b0b, 
+		0x0b0b0b0c, 
+		0x0b0c0b0c, 
+		0x0c0c0c0b, 
+		0x0c0c0c0c,  };
+
 	while(1)
 	{
 //XXX GET CREATIVE HOW TO DITHER
-		uint32_t cp = (SysTick->CNT>>16)&0x7ff;
-		int targ_f = cp+37*4*4; //(frameno & 511)*9 + 1700;
+		uint32_t cp = (SysTick->CNT>>16)&0x1fff;
+		int shift = cp; //(frameno & 511)*9 + 1700;
+		int targ_f = 1024;
 		uint32_t * tail = 0xfffffffc & (uintptr_t)(((uint8_t*)end) - DMA1_Channel2->CNTR);
 
 		if( tail == end ) tail--;
 
 		while( here != tail )
 		{
-			uint32_t setf = 0x0a0a0a09;
-			if( run_f > targ_f )
-			{
-				setf = 0x0a0a0a0a;
-				run_f += 37*4*4;
-				run_f -= targ_f;
-			}
-			else
-			{
-				run_f += 36*4*4;
-			}
-
-			*here = setf;
-
-			here++;
+			*(here++) = tablef[run_f>>10];
+			run_f &= 1023;
+			run_f += shift;
 			if( here == end )
 				here = start;
 		}
