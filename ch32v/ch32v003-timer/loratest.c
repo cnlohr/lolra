@@ -319,9 +319,9 @@ skipreset:\n\
 		}
 */
 }
-void LoopFunction2() __attribute__((section(".srodata"))) __attribute__ ((noinline));
+void LoopFunction2() __attribute__((aligned(256))) __attribute__((section(".srodata"))) __attribute__ ((noinline));
 
-__attribute__((section(".sdata"))) const uint32_t tablef[] = {
+__attribute__((section(".sdata"))) __attribute__((aligned(256))) const uint32_t tablef[] = {
 		0x09090909, 
 		0x0909090a, 
 		0x090a090a, 
@@ -347,29 +347,28 @@ void LoopFunction2()
 	uint32_t * start = (uint8_t*)DMA1_Channel2->MADDR;
 	uint32_t * end = (uint8_t*)((uint32_t)DMA1_Channel2->MADDR + SENDBUFF_WORDS);
 	uint32_t * here = start;
-	uint32_t targ = 2000;
 
 	int run_f = 0;
 
+	volatile uint32_t * cntrptr = &DMA1_Channel2->CNTR;
 
-	
 	while(1)
 	{
-//
-		uint32_t * tail = 0xfffffffc & (uintptr_t)(((uint8_t*)end) - DMA1_Channel2->CNTR);
-
-		if( tail == end ) tail--;
+		//uint32_t * tail = 0xfffffffc & (uintptr_t)(((uint8_t*)end) - *cntrptr);
+		//if( tail == end ) tail--;
+		uint32_t * tail = ((SENDBUFF_WORDS-1) & (0xfffffffc)) & (uintptr_t)(((uint8_t*)start) + SENDBUFF_WORDS - *cntrptr);
 
 		while( here != tail )
 		{
-			uint32_t cp = ((SysTick->CNT>>12)&0x1fff);
-			*(here++) = tablef[run_f>>13];
-			run_f &= 8191;
+			uint32_t cp = ((SysTick->CNT>>14)&0xfff)+0x4000;
+			*(here++) = tablef[run_f>>12];
+			run_f &= 4095;
 			run_f += cp;
 			if( here == end )
 				here = start;
 		}
 	}
+
 }
 
 
@@ -452,7 +451,7 @@ int main()
 	TIM1->CHCTLR1 = TIM_OC1M_2 | TIM_OC1M_1;
 	
 	// Set the Capture Compare Register value to 50% initially
-	TIM1->CH3CVR = 3;
+	TIM1->CH3CVR = 4;
 	TIM1->CH1CVR = 0; // This triggers DMA.
 	
 	// Enable TIM1 outputs
