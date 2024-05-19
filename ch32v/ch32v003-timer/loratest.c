@@ -241,7 +241,6 @@ complete:
 
 
 void LoopFunction()  __attribute__((section(".srodata")));
-
 void LoopFunction()
 {
 	uint8_t * start = (uint8_t*)DMA1_Channel2->MADDR;
@@ -320,6 +319,59 @@ skipreset:\n\
 		}
 */
 }
+void LoopFunction2() __attribute__((section(".srodata"))) __attribute__ ((noinline));
+
+__attribute__((section(".sdata"))) const uint32_t tablef[] = {
+		0x09090909, 
+		0x0909090a, 
+		0x090a090a, 
+		0x0a0a0a09, 
+		0x0a0a0a0a, 
+		0x0a0a0a0b, 
+		0x0a0b0a0b, 
+		0x0b0b0b0a, 
+		0x0b0b0b0b, 
+		0x0b0b0b0c, 
+		0x0b0c0b0c, 
+		0x0c0c0c0b, 
+		0x0c0c0c0c,
+		0x0c0c0c0d, 
+		0x0c0d0c0d, 
+		0x0d0d0d0c, 
+		0x0d0d0d0d,
+	};
+
+void LoopFunction2()
+{
+
+	uint32_t * start = (uint8_t*)DMA1_Channel2->MADDR;
+	uint32_t * end = (uint8_t*)((uint32_t)DMA1_Channel2->MADDR + SENDBUFF_WORDS);
+	uint32_t * here = start;
+	uint32_t targ = 2000;
+
+	int run_f = 0;
+
+
+	
+	while(1)
+	{
+//
+		uint32_t * tail = 0xfffffffc & (uintptr_t)(((uint8_t*)end) - DMA1_Channel2->CNTR);
+
+		if( tail == end ) tail--;
+
+		while( here != tail )
+		{
+			uint32_t cp = ((SysTick->CNT>>12)&0x1fff);
+			*(here++) = tablef[run_f>>13];
+			run_f &= 8191;
+			run_f += cp;
+			if( here == end )
+				here = start;
+		}
+	}
+}
+
 
 int main()
 {
@@ -444,44 +496,7 @@ int main()
 	int frameno = 0;
 //	LoopFunction();
 
-
-	uint32_t * start = (uint8_t*)DMA1_Channel2->MADDR;
-	uint32_t * end = (uint8_t*)((uint32_t)DMA1_Channel2->MADDR + SENDBUFF_WORDS);
-	uint32_t * here = start;
-	uint32_t targ = 2000;
-
-	int run_f = 0;
-
-	const uint32_t tablef[] = {
-		0x0a0a0a0a, 
-		0x0a0a0a0b, 
-		0x0a0b0a0b, 
-		0x0b0b0b0a, 
-		0x0b0b0b0b, 
-		0x0b0b0b0c, 
-		0x0b0c0b0c, 
-		0x0c0c0c0b, 
-		0x0c0c0c0c,  };
-
-	while(1)
-	{
-//XXX GET CREATIVE HOW TO DITHER
-		uint32_t cp = (SysTick->CNT>>16)&0x1fff;
-		int shift = cp; //(frameno & 511)*9 + 1700;
-		int targ_f = 1024;
-		uint32_t * tail = 0xfffffffc & (uintptr_t)(((uint8_t*)end) - DMA1_Channel2->CNTR);
-
-		if( tail == end ) tail--;
-
-		while( here != tail )
-		{
-			*(here++) = tablef[run_f>>10];
-			run_f &= 1023;
-			run_f += shift;
-			if( here == end )
-				here = start;
-		}
-	}
+	LoopFunction2();
 
 
 #if 0
