@@ -46,6 +46,13 @@ SOFTWARE.
 
 // NOT LORA!!! -- but experimenting with the possibility of rx.
 
+// SETUP INSTRUCTIONS:
+//   (1) `make` in the optionbytes folder to configure `RESET` correctly.
+//   (2) Create a tone (if using the funprog, ../ch32v003fun/minichlink/minichlink -X ECLK 1:235:189:9:3 for 27.48387097MHz
+//   (2) or, for 096774198MHz -  ../ch32v003fun/minichlink/minichlink -X ECLK 1:108:140:9:3
+
+
+
 #include "ch32v003fun.h"
 #include <stdio.h>
 
@@ -60,10 +67,30 @@ SOFTWARE.
 	 SAMPTR2 = 1 (9 cycles)
 	 PWM period = 39 (48/40 = 1.2MHz)
 
-	We are going to target 1.5MHz. (Period = 31), Divisor = 32
+	Perform Quadrature Decoding
+	  I  =  + + - -
+	  Q  =  + - - +
+
+	We want the target waveform to be exactly n * Fs - fs / 4 = FBrd
+	for a natural value of n.
+	 27 / (n-1/4) = Fs
+
+	Oddly enough, after creating a table with various values of N and
+	possible divisors, a PERFECT divisor works out to the "max speed" listed above (1.714MHz)
+	but that makes me scared at this juncture.  What if we intentionally just target 1.5MHz?
+     1.5 = freq / (n-1/4)
+    arbitrarily select n to be 17 (for the 17th harmonic)
+     
+	TODO: Is it supposed to be n-1/4 or n+1/4 or does it not matter?
+
+
+	We are going to target 1.548387097MHz. (PPWM eriod = 30), Divisor = 31
+
+	(1.548387097x1.25)x14 = 27.096774198
+
 */
 
-#define PWM_PERIOD 31
+#define PWM_PERIOD 30
 
 #define ADC_BUFFSIZE 256
 volatile uint16_t adc_buffer[ADC_BUFFSIZE];
@@ -159,6 +186,66 @@ static void SetupTimer1()
 }
 
 
+void InnerLoop() __attribute__((noreturn));
+
+void InnerLoop()
+{
+	int i = 0;
+	int q = 0;
+	int tpl = 0;
+
+	// Timer goes backwards when we are moving forwards.
+	volatile uint16_t * adc_buffer_end = 0;
+	volatile uint16_t * adc_buffer_top = adc_buffer + ADC_BUFFSIZE;
+	volatile uint16_t * adc = adc_buffer;
+
+	int frcnt = 0;
+
+	int tstart = 0;
+
+	while( 1 )
+	{
+		tpl = ADC_BUFFSIZE - DMA1_Channel1->CNTR; // Warning, sometimes this is == to the base, or == 0 (i.e. might be 256, if top is 255)
+		if( tpl == ADC_BUFFSIZE ) tpl = 0;
+
+		adc_buffer_end = adc_buffer + ( ( tpl / 4) * 4 );
+
+		while( adc != adc_buffer_end )
+		{
+			int32_t t = adc[0];
+			i += t; q += t;
+			t = adc[1];
+			i -= t; q += t;
+			t = adc[2];
+			i -= t; q -= t;
+			t = adc[3];
+			i += t; q -= t;
+			adc += 4;
+			frcnt += 4;
+			if( adc == adc_buffer_top ) adc = adc_buffer;
+		}
+
+		if( frcnt > 1000000 )
+		{
+			printf( "I: %6d Q: %6d [%d %d %d %d] / %d\n", i ,q, adc_buffer[0], adc_buffer[1], adc_buffer[2], adc_buffer[3], SysTick->CNT - tstart );
+			frcnt = 0;
+			i = 0;
+			q = 0;
+			tstart = SysTick->CNT;
+		}
+/*
+		Delay_Us( 100 );
+		int end = DMA1_Channel1->CNTR;
+		int v0 = adc_buffer[0];
+		int v1 = adc_buffer[1];
+		int v2 = adc_buffer[2];
+		int v3 = adc_buffer[3];
+		printf( "%d %d %d %d %d\n", (uint8_t)(start-end), v0, v1, v2, v3 );
+*/
+	}
+
+}
+
 int main()
 {
 	// REQUIRES External 24MHz oscillator
@@ -183,15 +270,5 @@ int main()
 
 	printf( "Timer 1 setup\n" );
 
-	while( 1 )
-	{
-		int start = DMA1_Channel1->CNTR;
-		Delay_Us( 100 );
-		int end = DMA1_Channel1->CNTR;
-		int v0 = adc_buffer[0];
-		int v1 = adc_buffer[1];
-		int v2 = adc_buffer[2];
-		int v3 = adc_buffer[3];
-		printf( "%d %d %d %d %d\n", (uint8_t)(start-end), v0, v1, v2, v3 );
-	}
+	InnerLoop();
 }
