@@ -54,6 +54,8 @@ SOFTWARE.
 
 #include "LoRa-SDR-Code.h"
 
+#define FM_TRANSMITTER_SWEEP
+
 //#define LORAWAN
 //#define TEST_TONE
 
@@ -373,9 +375,13 @@ void LoopFunction2()
 
 		while( here != tail )
 		{
+#ifdef FM_TRANSMITTER_SWEEP
+			// 97.7MHz FM Station
+			uint32_t cp = ((SysTick->CNT>>3)&0x3fff)+0x12900;
+#else
+			// 315MHz
 			uint32_t cp = 0x1bfc3;
-				//((SysTick->CNT>>3)&0x3fff)+0x12900; (@f>>12) - 97.7MHz FM. if paired with TIM_OC3M_0 | TIM_OC3M_1 | TIM_OC3PE | TIM_OC3FE runf>>12, 12
-				// 0x1bfc0 = Exactly 315MHz if paired with  TIM_OC3M_2 | TIM_OC3M_1 | TIM_OC3PE | TIM_OC3FE, and run_f>>12? 12?
+#endif
 			*(here++) = tablef[run_f>>12];
 			run_f &= (1<<12)-1;
 			run_f += cp;
@@ -465,7 +471,11 @@ int main()
 	//  4, 5: Nothing
 	//  6: "Fast PWM mode 1"
 	//  7: Flipping (Further out)
+#ifdef FM_TRANSMITTER_SWEEP
+	TIM1->CHCTLR2 =  TIM_OC3M_0 | TIM_OC3M_1 | TIM_OC3PE | TIM_OC3FE;
+#else
 	TIM1->CHCTLR2 =  TIM_OC3M_2 | TIM_OC3M_1 | TIM_OC3PE | TIM_OC3FE;
+#endif
 
 	// Compare 1 = for triggering
 	TIM1->CHCTLR1 = TIM_OC1M_2 | TIM_OC1M_1;
