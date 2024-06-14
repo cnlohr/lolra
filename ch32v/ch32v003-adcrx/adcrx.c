@@ -49,7 +49,8 @@ SOFTWARE.
 // SETUP INSTRUCTIONS:
 //   (1) `make` in the optionbytes folder to configure `RESET` correctly.
 //   (2) Create a tone (if using the funprog, ../ch32v003fun/minichlink/minichlink -X ECLK 1:235:189:9:3 for 27.48387097MHz
-//   (2) or, for 096774198MHz -  ../ch32v003fun/minichlink/minichlink -X ECLK 1:108:140:9:3
+//   (2) or, for 24.387096762MHz -  ../ch32v003fun/minichlink/minichlink -X ECLK 1:150:49:8:3
+
 
 
 
@@ -86,7 +87,8 @@ SOFTWARE.
 
 	We are going to target 1.548387097MHz. (PPWM eriod = 30), Divisor = 31
 
-	(1.548387097x1.25)x14 = 27.096774198
+	^^ /4 *64 = 24.7741935
+	^^ /4 *63 = 24.387096762
 
 */
 
