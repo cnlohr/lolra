@@ -324,7 +324,7 @@ __attribute__((section(".sdata"))) __attribute__((aligned(256))) const uint32_t 
 		0x0909090a, 
 		0x090a090a, 
 		0x0a0a0a09, 
-		0x0a0a0a0a, 
+		0x0a0a0a0a,  // Below this line is unstable - i.e. sometimes there are missing DMA transfers.
 		0x0a0a0a0b, 
 		0x0a0b0a0b, 
 		0x0b0b0b0a, 
@@ -337,7 +337,6 @@ __attribute__((section(".sdata"))) __attribute__((aligned(256))) const uint32_t 
 		0x0c0d0c0d, 
 		0x0d0d0d0c, 
 		0x0d0d0d0d,
-		0x0d0d0d0d, 
 		0x0d0d0d0e, 
 		0x0d0e0d0e, 
 		0x0e0e0e0d,
@@ -349,6 +348,10 @@ __attribute__((section(".sdata"))) __attribute__((aligned(256))) const uint32_t 
 		0x0f0f0f10, 
 		0x0f100f10, 
 		0x1010100f,
+		0x10101010, 
+		0x10101011, 
+		0x10111011, 
+		0x11111110,
 	};
 
 void LoopFunction2()
@@ -370,7 +373,9 @@ void LoopFunction2()
 
 		while( here != tail )
 		{
-			uint32_t cp = ((SysTick->CNT>>14)&0xfff)+0x8030;
+			uint32_t cp = 0x1bfc3;
+				//((SysTick->CNT>>3)&0x3fff)+0x12900; (@f>>12) - 97.7MHz FM. if paired with TIM_OC3M_0 | TIM_OC3M_1 | TIM_OC3PE | TIM_OC3FE runf>>12, 12
+				// 0x1bfc0 = Exactly 315MHz if paired with  TIM_OC3M_2 | TIM_OC3M_1 | TIM_OC3PE | TIM_OC3FE, and run_f>>12? 12?
 			*(here++) = tablef[run_f>>12];
 			run_f &= (1<<12)-1;
 			run_f += cp;
@@ -458,14 +463,15 @@ int main()
 	//  0, 1, 2: Nothing
 	//  3: Flip
 	//  4, 5: Nothing
-	//  6, 7: Flipping (Further out)
-	TIM1->CHCTLR2 = TIM_OC3M_1 | TIM_OC3M_0 | TIM_OC3PE | TIM_OC3FE;
+	//  6: "Fast PWM mode 1"
+	//  7: Flipping (Further out)
+	TIM1->CHCTLR2 =  TIM_OC3M_2 | TIM_OC3M_1 | TIM_OC3PE | TIM_OC3FE;
 
 	// Compare 1 = for triggering
 	TIM1->CHCTLR1 = TIM_OC1M_2 | TIM_OC1M_1;
 	
 	// Set the Capture Compare Register value to 50% initially
-	TIM1->CH3CVR = 0;  // ACTUALLY Ignored typically it seems.
+	TIM1->CH3CVR = 5;  // ACTUALLY Ignored typically it seems.
 	TIM1->CH1CVR = 0; // This triggers DMA.
 	
 	// Enable TIM1 outputs
