@@ -1,6 +1,6 @@
 all : flash
 
-TARGET:=loratest
+TARGET:=nonlora
 TARGET_MCU:=CH32V003
 CH32V003FUN:=../ch32v003fun/ch32v003fun
 
