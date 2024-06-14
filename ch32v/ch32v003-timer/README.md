@@ -1,4 +1,4 @@
-# DMA Timer CH32V003 Firmware-Only 900MHz LoRa Transmitter
+# DMA Timer CH32V003 Firmware-Only 315MHz / 97.7 FM Transmitting code
 
 THIS IS A DRAFT
 
