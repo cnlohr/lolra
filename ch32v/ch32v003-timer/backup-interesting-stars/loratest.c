@@ -54,17 +54,11 @@ SOFTWARE.
 
 #include "LoRa-SDR-Code.h"
 
-//#define LORAWAN
-//#define TEST_TONE
-
-#ifdef LORAWAN
-#include "lorawan_simple.h"
-#endif
-
 #define DMA_SIZE_WORDS 128
 
 #define SENDBUFF_WORDS (DMA_SIZE_WORDS*2)
 uint8_t sendbuff[SENDBUFF_WORDS];
+
 
 // Bits are shifted out MSBit first, then to LSBit
 
@@ -316,10 +310,6 @@ skipreset:\n\
 void LoopFunction2() __attribute__((aligned(256))) __attribute__((section(".srodata"))) __attribute__ ((noinline));
 
 __attribute__((section(".sdata"))) __attribute__((aligned(256))) const uint32_t tablef[] = {
-		0x08080808, 
-		0x08080809, 
-		0x08090809, 
-		0x09090908, 
 		0x09090909, 
 		0x0909090a, 
 		0x090a090a, 
@@ -337,18 +327,6 @@ __attribute__((section(".sdata"))) __attribute__((aligned(256))) const uint32_t 
 		0x0c0d0c0d, 
 		0x0d0d0d0c, 
 		0x0d0d0d0d,
-		0x0d0d0d0d, 
-		0x0d0d0d0e, 
-		0x0d0e0d0e, 
-		0x0e0e0e0d,
-		0x0e0e0e0e, 
-		0x0e0e0e0f, 
-		0x0e0f0e0f, 
-		0x0f0f0f0e,
-		0x0f0f0f0f, 
-		0x0f0f0f10, 
-		0x0f100f10, 
-		0x1010100f,
 	};
 
 void LoopFunction2()
@@ -370,9 +348,9 @@ void LoopFunction2()
 
 		while( here != tail )
 		{
-			uint32_t cp = ((SysTick->CNT>>14)&0xfff)+0x8030;
+			uint32_t cp = ((SysTick->CNT>>14)&0xfff)+0x4000;
 			*(here++) = tablef[run_f>>12];
-			run_f &= (1<<12)-1;
+			run_f &= 4095;
 			run_f += cp;
 			if( here == end )
 				here = start;
@@ -454,18 +432,14 @@ int main()
 	TIM1->CCER |= TIM_CC1E;
 	
 	// Compare 3 = for output
-	// Modes:
-	//  0, 1, 2: Nothing
-	//  3: Flip
-	//  4, 5: Nothing
-	//  6, 7: Flipping (Further out)
-	TIM1->CHCTLR2 = TIM_OC3M_1 | TIM_OC3M_0 | TIM_OC3PE | TIM_OC3FE;
+	TIM1->CHCTLR2 = 
+		TIM_OC3M_0 | TIM_OC3M_1;
 
 	// Compare 1 = for triggering
 	TIM1->CHCTLR1 = TIM_OC1M_2 | TIM_OC1M_1;
 	
 	// Set the Capture Compare Register value to 50% initially
-	TIM1->CH3CVR = 0;  // ACTUALLY Ignored typically it seems.
+	TIM1->CH3CVR = 4;
 	TIM1->CH1CVR = 0; // This triggers DMA.
 	
 	// Enable TIM1 outputs
