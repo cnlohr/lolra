@@ -61,6 +61,22 @@ blocks:
     coordinate: [1264, 48.0]
     rotation: 0
     state: true
+- name: blocks_complex_to_float_0_0
+  id: blocks_complex_to_float
+  parameters:
+    affinity: ''
+    alias: ''
+    comment: ''
+    maxoutbuf: '0'
+    minoutbuf: '0'
+    vlen: FFTSIZE
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [1424, 344.0]
+    rotation: 0
+    state: true
 - name: blocks_complex_to_mag_squared_0
   id: blocks_complex_to_mag_squared
   parameters:
@@ -107,7 +123,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [808, 524.0]
+    coordinate: [840, 664.0]
     rotation: 0
     state: true
 - name: blocks_file_sink_1
@@ -164,6 +180,42 @@ blocks:
     coordinate: [1736, 160.0]
     rotation: 0
     state: enabled
+- name: blocks_file_sink_1_0_0_0
+  id: blocks_file_sink
+  parameters:
+    affinity: ''
+    alias: ''
+    append: 'False'
+    comment: ''
+    file: /tmp/raw_Q.dat
+    type: float
+    unbuffered: 'False'
+    vlen: FFTSIZE
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [1816, 568.0]
+    rotation: 0
+    state: enabled
+- name: blocks_file_sink_1_0_1
+  id: blocks_file_sink
+  parameters:
+    affinity: ''
+    alias: ''
+    append: 'False'
+    comment: ''
+    file: /tmp/raw_I.dat
+    type: float
+    unbuffered: 'False'
+    vlen: FFTSIZE
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [1848, 448.0]
+    rotation: 0
+    state: enabled
 - name: blocks_message_debug_0
   id: blocks_message_debug
   parameters:
@@ -176,7 +228,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [1512, 608.0]
+    coordinate: [1544, 744.0]
     rotation: 0
     state: true
 - name: blocks_nlog10_ff_0
@@ -233,7 +285,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [808, 124.0]
+    coordinate: [808, 48.0]
     rotation: 0
     state: enabled
 - name: lora_sdr_crc_verif_0
@@ -250,7 +302,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [1152, 592.0]
+    coordinate: [1184, 728.0]
     rotation: 0
     state: true
 - name: lora_sdr_deinterleaver_0
@@ -266,7 +318,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [1256, 372.0]
+    coordinate: [1288, 504.0]
     rotation: 0
     state: true
 - name: lora_sdr_dewhitening_0
@@ -281,7 +333,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [1296, 480.0]
+    coordinate: [1328, 616.0]
     rotation: 0
     state: true
 - name: lora_sdr_fft_demod_0
@@ -298,7 +350,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [816, 372.0]
+    coordinate: [848, 504.0]
     rotation: 0
     state: true
 - name: lora_sdr_frame_sync_0
@@ -337,7 +389,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [1040, 372.0]
+    coordinate: [1072, 504.0]
     rotation: 0
     state: true
 - name: lora_sdr_hamming_dec_0
@@ -353,7 +405,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [1472, 372.0]
+    coordinate: [1504, 504.0]
     rotation: 0
     state: true
 - name: lora_sdr_header_decoder_0
@@ -374,7 +426,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [1016, 476.0]
+    coordinate: [1048, 616.0]
     rotation: 0
     state: true
 - name: osmosdr_source_0
@@ -552,7 +604,7 @@ blocks:
     dc_offset_mode7: '0'
     dc_offset_mode8: '0'
     dc_offset_mode9: '0'
-    freq0: '903900000'
+    freq0: '1090000000'
     freq1: 100e6
     freq10: 100e6
     freq11: 100e6
@@ -1199,11 +1251,14 @@ blocks:
 connections:
 - [blocks_complex_to_float_0, '0', blocks_file_sink_1_0, '0']
 - [blocks_complex_to_float_0, '1', blocks_file_sink_1_0_0, '0']
+- [blocks_complex_to_float_0_0, '0', blocks_file_sink_1_0_1, '0']
+- [blocks_complex_to_float_0_0, '1', blocks_file_sink_1_0_0_0, '0']
 - [blocks_complex_to_mag_squared_0, '0', blocks_nlog10_ff_0, '0']
 - [blocks_correctiq_0, '0', blocks_stream_to_vector_0, '0']
 - [blocks_correctiq_0, '0', lora_sdr_frame_sync_0, '0']
 - [blocks_correctiq_0, '0', qtgui_waterfall_sink_x_0, '0']
 - [blocks_nlog10_ff_0, '0', blocks_file_sink_1, '0']
+- [blocks_stream_to_vector_0, '0', blocks_complex_to_float_0_0, '0']
 - [blocks_stream_to_vector_0, '0', fft_vxx_0, '0']
 - [fft_vxx_0, '0', blocks_complex_to_float_0, '0']
 - [fft_vxx_0, '0', blocks_complex_to_mag_squared_0, '0']

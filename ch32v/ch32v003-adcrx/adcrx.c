@@ -86,7 +86,7 @@ SOFTWARE.
 
 
 	We will be targeting 48/35 MHz - (with PWM_PERIOD 34)
-	Calculated to use the 19.75th harmonic @ 27.08571429MHz, but ideal found at 27.086444MHz
+	Calculated to use the 19.75th harmonic @ 27.08571429MHz, but ideal found at 27.08643MHz
 */
 
 #define PWM_PERIOD 34
