@@ -85,14 +85,11 @@ SOFTWARE.
 	TODO: Is it supposed to be n-1/4 or n+1/4 or does it not matter?
 
 
-	We are going to target 1.548387097MHz. (PPWM eriod = 30), Divisor = 31
-
-	^^ /4 *64 = 24.7741935
-	^^ /4 *63 = 24.387096762
-
+	We will be targeting 48/35 MHz - (with PWM_PERIOD 34)
+	Calculated to use the 19.75th harmonic @ 27.08571429MHz, but ideal found at 27.086444MHz
 */
 
-#define PWM_PERIOD 30
+#define PWM_PERIOD 34
 
 #define ADC_BUFFSIZE 256
 volatile uint16_t adc_buffer[ADC_BUFFSIZE];
@@ -160,6 +157,7 @@ void SetupADC()
 
 	// start conversion
 	ADC1->CTLR2 |= ADC_SWSTART;
+
 }
 
 static void SetupTimer1()
@@ -189,6 +187,7 @@ static void SetupTimer1()
 
 
 void InnerLoop() __attribute__((noreturn));
+
 
 void InnerLoop()
 {
@@ -227,9 +226,14 @@ void InnerLoop()
 			if( adc == adc_buffer_top ) adc = adc_buffer;
 		}
 
-		if( frcnt > 1000000 )
+		if( frcnt > 2000 )
 		{
-			printf( "I: %6d Q: %6d [%d %d %d %d] / %d\n", i ,q, adc_buffer[0], adc_buffer[1], adc_buffer[2], adc_buffer[3], SysTick->CNT - tstart );
+			int ti = i>>2;
+			int tq = q>>2;
+			int s = (ti*ti + tq*tq)>>8;
+			//s = usqrt4(s);
+			printf( "%8d I:%7d Q:%7d [%d %d %d %d] / %d\n",s, i ,q, adc_buffer[0], adc_buffer[1], adc_buffer[2], adc_buffer[3], SysTick->CNT - tstart );
+			//printf( "%d\n", s );
 			frcnt = 0;
 			i = 0;
 			q = 0;
@@ -265,6 +269,19 @@ int main()
 	RCC->APB1PCENR = RCC_APB1Periph_TIM2;
 
 	SetupADC();
+
+
+#if 0
+	// turn on the op-amp
+	EXTEN->EXTEN_CTR |= EXTEN_OPA_EN;
+
+	// select op-amp pos pin: 0 = PA2, 1 = PD7
+	EXTEN->EXTEN_CTR |= EXTEN_OPA_PSEL;
+
+	// select op-amp neg pin: 0 = PA1, 1 = PD0
+	EXTEN->EXTEN_CTR |= EXTEN_OPA_NSEL;
+#endif
+
 
 	printf( "ADC Setup\n" );
 
