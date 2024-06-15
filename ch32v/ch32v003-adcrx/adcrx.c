@@ -226,7 +226,7 @@ void InnerLoop()
 			if( adc == adc_buffer_top ) adc = adc_buffer;
 		}
 
-		if( frcnt > 2000 )
+		if( frcnt > 8000 )
 		{
 			int ti = i>>2;
 			int tq = q>>2;
