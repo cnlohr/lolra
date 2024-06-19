@@ -1,6 +1,4 @@
-// XXX TODO: Play with high bits of ADC control to see if there's a gain cicuit.
-// XXX TODO: Try to see if there is a way to tightly  control Q, right now it's kinda random.
-// XXX TODO: It looks like our loop can exit early - or more specifically we can "wrap around" our data because adc may not be == because it is skipping numbers
+//XXX DOES NOT CURRENTLY WORK XXX
 /**
 
 MIT-like-non-ai-license
@@ -54,61 +52,41 @@ SOFTWARE.
 //   (2) Create a tone (if using the funprog, ../ch32v003fun/minichlink/minichlink -X ECLK 1:235:189:9:3 for 27.48387097MHz
 //   (2) or, for 24.387096762MHz -  ../ch32v003fun/minichlink/minichlink -X ECLK 1:150:49:8:3
 
+/* More notes
 
+ * Minimum sample time with DMA = fCPU / 28 (5.14MHz)
+
+*/
 
 
 #include "ch32v003fun.h"
 #include <stdio.h>
 
 /* General note:
-	Max speed was found to be:
-	 ADCclk = RCC / 2
-	 SAMPTR2 = 0 (3 cycles) 
-     PWM period = 27 (48/28 = 1.714MHz)
-
-	If you go a little slower...
-	 ADCclk = RCC / 2
-	 SAMPTR2 = 1 (9 cycles)
-	 PWM period = 39 (48/40 = 1.2MHz)
-
-	Perform Quadrature Decoding
-	  I  =  + + - -
-	  Q  =  + - - +
-
-	We want the target waveform to be exactly n * Fs - fs / 4 = FBrd
-	for a natural value of n.
-	 27 / (n-1/4) = Fs
-
-	Oddly enough, after creating a table with various values of N and
-	possible divisors, a PERFECT divisor works out to the "max speed" listed above (1.714MHz)
-	but that makes me scared at this juncture.  What if we intentionally just target 1.5MHz?
-     1.5 = freq / (n-1/4)
-    arbitrarily select n to be 17 (for the 17th harmonic)
-     
-	TODO: Is it supposed to be n-1/4 or n+1/4 or does it not matter?
-
-
-	We will be targeting 48/35 MHz - (with PWM_PERIOD 34)
-	Calculated to use the 19.75th harmonic @ 27.08571429MHz, but ideal found at 27.08643MHz
 */
 
-#define Q 80
+#define Q 32
 
-#define PWM_PERIOD (31-1) //For 27.0857MHz
+#define PWM_PERIOD (40-1) //For 27.27MHz
 #define QUADRATURE
 
 //#define PWM_PERIOD (32-1)
 //#define QUADRATURE
-#define PWM_OUTPUT 3
+//#define PWM_OUTPUT 3
 
 #define ADC_BUFFSIZE 256
 volatile uint16_t adc_buffer[ADC_BUFFSIZE];
 
 void SetupADC()
 {
-	// PD4 is analog input chl 7
-	GPIOD->CFGLR &= ~(0xf<<(4*4));	// CNF = 00: Analog, MODE = 00: Input
+	// XXX TODO -look into PGA
+	// XXX TODO - Look into tag-teaming the ADCs
+
+	// PDA is analog input chl 7
+	GPIOA->CFGLR &= ~(0xf<<(4*7));	// CNF = 00: Analog, MODE = 00: Input
 	
+	// ADC CLK is chained off of APB2.
+
 	// Reset the ADC to init all regs
 	RCC->APB2PRSTR |= RCC_APB2Periph_ADC1;
 	RCC->APB2PRSTR &= ~RCC_APB2Periph_ADC1;
@@ -141,7 +119,7 @@ void SetupADC()
 	while(ADC1->CTLR2 & ADC_CAL);
 
 	// ADC_SCAN: Allow scanning.
-	ADC1->CTLR1 = ADC_SCAN;
+	ADC1->CTLR1 = 0;// (1<<26); // | (1<<26); // + Buffer
 
 	// Turn on DMA
 	RCC->AHBPCENR |= RCC_AHBPeriph_DMA1;
@@ -163,10 +141,10 @@ void SetupADC()
 	DMA1_Channel1->CFGR |= DMA_CFGR1_EN;
 	
 	// Enable continuous conversion and DMA
-	//ADC1->CTLR2 |= ADC_DMA | ADC_EXTSEL; //ADC_CONT
+	ADC1->CTLR2 |= ADC_DMA; // | ADC_CONT;
 
 	// start conversion
-	ADC1->CTLR2 |= ADC_SWSTART;
+	ADC1->CTLR2 |= ADC_SWSTART;// | ADC_CONT;
 
 }
 
@@ -176,17 +154,24 @@ static void SetupTimer1()
 	RCC->APB2PRSTR |= RCC_APB2Periph_TIM1;
 	RCC->APB2PRSTR &= ~RCC_APB2Periph_TIM1;
 
-	TIM1->PSC = 0x0000;  // Prescalar to 0x0000 (so, 48MHz base clock)
+	TIM1->PSC = 0;  // Prescalar to 0x0000 (so, 48MHz base clock)
 	TIM1->ATRLR = PWM_PERIOD;
 
 #ifdef PWM_OUTPUT
-	GPIOC->CFGLR &= ~(0xf<<(4*4));
-	GPIOC->CFGLR |= (GPIO_Speed_10MHz | GPIO_CNF_OUT_PP_AF)<<(4*4);
+	// PA10 = T1CH3.
+	GPIOA->CFGHR &= ~(0xf<<(4*2));
+	GPIOA->CFGHR |= (GPIO_Speed_10MHz | GPIO_CNF_OUT_PP_AF)<<(4*2);
 
-	TIM1->CCER = TIM_CC4E | TIM_CC4P;
-	TIM1->CHCTLR2 = TIM_OC4M_2 | TIM_OC4M_1;
-	TIM1->CH4CVR = 5;  // Actual duty cycle (Off to begin with)
+	TIM1->CCER = TIM_CC3E | TIM_CC3P;
+	TIM1->CHCTLR2 = TIM_OC3M_2 | TIM_OC3M_1;
+	TIM1->CH3CVR = 5;  // Actual duty cycle (Off to begin with)
 #endif
+
+	TIM1->CCER = TIM_CC1E | TIM_CC1P;
+	TIM1->CHCTLR1 = TIM_OC1M_2 | TIM_OC1M_1;
+
+	TIM1->SWEVGR = TIM_CC1G | TIM_CC4G | TIM_COMG | TIM_TG;
+	TIM1->CH1CVR = 1;
 
 	// Setup TRGO for ADC.  This makes is to the ADC will trigger on timer
 	// reset, so we trigger at the same position every time relative to the
@@ -223,7 +208,7 @@ void InnerLoop()
 		if( tpl == ADC_BUFFSIZE ) tpl = 0;
 
 		adc_buffer_end = adc_buffer + ( ( tpl / 4) * 4 );
-
+//printf( "%3d %4d %d %04x\n", DMA1_Channel1->CNTR, TIM1->CNT, ADC1->RDATAR, ADC1->STATR );
 		while( adc != adc_buffer_end )
 		{
 #ifdef QUADRATURE
@@ -245,6 +230,7 @@ void InnerLoop()
 
 			if( adc == adc_buffer_top ) adc = adc_buffer;
 		}
+//printf( "%d\n", frcnt );
 
 		if( frcnt > Q )
 		{
@@ -262,19 +248,16 @@ void InnerLoop()
 			int tv = (s>>PWM_OUTPUT) + (PWM_PERIOD/2);
 			if( tv < 0 ) tv = 0;
 			if( tv >= PWM_PERIOD ) tv = PWM_PERIOD-1;
-			TIM1->CH4CVR = tv;
+			TIM1->CH3CVR = tv;
 #else
-			int ti = i>>2;
-			int tq = q>>2;
-			int s = (ti*ti + tq*tq)>>8;
-			//s = usqrt4(s);
-
-			printf( "%8d I:%7d Q:%7d [%d %d %d %d] / %d\n",s, i ,q, adc_buffer[0], adc_buffer[1], adc_buffer[2], adc_buffer[3], SysTick->CNT - tstart );
+			printf( "%8d I:%7d Q:%7d [%d %d %d %d] / %d\n",s, i ,q, adc_buffer[0], adc_buffer[1], adc_buffer[2], adc_buffer[3], (int)(SysTick->CNT - tstart) );
 #endif
 			//printf( "%d\n", s );
 			frcnt = 0;
 			i = 0;
 			q = 0;
+			tpl = ADC_BUFFSIZE - DMA1_Channel1->CNTR;
+			adc = adc_buffer + ( ( tpl / 4) * 4 );
 			tstart = SysTick->CNT;
 		}
 /*
@@ -292,22 +275,24 @@ void InnerLoop()
 
 int main()
 {
-	// REQUIRES External 24MHz oscillator
-	printf( "Initializing\n" );
-
 	SystemInit();
 
+	SysTick->CTLR = (1<<2) | 1; // HCLK
+
+	Delay_Ms(100);
 	printf( "System On\n" );
 
-	// Enable Peripherals
-	RCC->APB2PCENR |= RCC_APB2Periph_GPIOD | RCC_APB2Periph_GPIOC |
-		RCC_APB2Periph_GPIOA | RCC_APB2Periph_TIM1 | RCC_APB2Periph_ADC1 |
-		RCC_APB2Periph_AFIO;
+	// x18; 8MHz x 18 = 144 MHz
+	RCC->CFGR0 &= ~RCC_PPRE2; // No divisor on APB1/2
+	RCC->CFGR0 &= ~RCC_PPRE1;
+	RCC->CFGR0 |= RCC_PLLMULL_0 | RCC_PLLMULL_1 | RCC_PLLMULL_2 | RCC_PLLMULL_3;
 
-	RCC->APB1PCENR = RCC_APB1Periph_TIM2;
+//	printf( "RCC: %08x\n", (RCC->CFGR0) );
+	RCC->AHBPCENR |= 3; //DMA2EN | DMA1EN
+	RCC->APB2PCENR |= RCC_APB2Periph_TIM1 | RCC_APB2Periph_ADC1 | RCC_APB2Periph_ADC2 | 0x07; // Enable all GPIO
+	RCC->APB1PCENR |= RCC_APB1Periph_TIM2;
 
 	SetupADC();
-
 
 #if 0
 	// turn on the op-amp
