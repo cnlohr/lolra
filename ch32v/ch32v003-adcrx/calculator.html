@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<HTML>
+<HEAD>
+<SCRIPT>
+
+
+function DrawSpan( colspan, freq, target, docolor )
+{
+	var fdist = Math.abs( freq - target );
+	fdist = Math.pow( fdist, 0.5 ) * 500;
+//	if( fdist > 255 ) fdist = 255;
+	let ret = "<TD COLSPAN=" + colspan + ' ';
+	if( docolor ) ret += 'STYLE="background-color:rgb(' + fdist + ',' + (511-fdist) + ',0)";';
+	ret += '>' + freq.toFixed(6) + "</TD>";
+	return ret;
+}
+
+function computeTable()
+{
+	const max_harmonics = 28|0;
+	const min_harmonics = 1|0;
+	let xtal = Number(document.getElementById("crystalmhz").value );
+	let target = Number(document.getElementById("targetmhz").value );
+	let contents = "<TABLE BORDER=1>";
+
+	contents += '<TR><TH>d\\h</div></TH>';
+	for( let h = 0|min_harmonics; h <= max_harmonics; h++ )
+	{
+		contents += "<TH COLSPAN=2>" + h + "</TH>";
+	}
+	contents += "</TR>";
+	
+
+	for( let n = 0|28; n <= 66; n++ )
+	{
+		for( let mode = 0; mode < 4; mode++ )
+		{
+			contents += "<TR>";
+			if( mode == 0 )
+				contents += "<TD ROWSPAN=4>" + n + "</TD>";
+			for( let h = 0|min_harmonics; h <= max_harmonics; h++ )
+			{
+				let freq = ( xtal / n );
+				if( mode == 0 )
+					contents += DrawSpan( 2, freq * h, target, false );
+				else if( mode == 1 )
+					contents += DrawSpan( 2, freq * (h-.25), target, true );
+				else if( mode == 2 )
+					contents += DrawSpan( 2, freq * (h+.25), target, true );
+				else if( mode == 3 )
+					contents += DrawSpan( 2, freq + (h+ 0.5), target, true );
+
+			}
+			contents += "</TD>";
+		}
+	}
+	contents += "</TABLE>";
+	document.getElementById( "TABLE" ).innerHTML = contents;
+}
+
+</SCRIPT>
+</HEAD>
+<BODY>
+
+<p>Tool for computing tuning to specific frequencies by use of direct ADC reading at specific timer-controlled rate to "tune" to specific frequencies either by quadrature or differential.</p>
+<TABLE>
+<TR><TD>Crystal MHz</TD><TD><INPUT ID=crystalmhz VALUE=48></TD></TR>
+<TR><TD>Target MHz</TD><TD><INPUT ID=targetmhz VALUE=27.1></TD></TR>
+<TR><TD COLSPAN=2><INPUT TYPE=SUBMIT ONCLICK="computeTable()"></TD></TR>
+</TABLE>
+
+<TABLE>
+<TR><TD>Quadrature:</TD></TR>
+<TR><TD>I = + + - -</TD></TR>
+<TR><TD>Q = + - - +</TD></TR>
+<TR><TD>Differntial:</TD></TR>
+<TR><TD>V = + - + -</TD></TR>
+<TR><TD>You choose the mode you operate in, either Quadrature or differential</TD></TR>
+</TABLE>
+
+<p> Table shows: </P>
+<TABLE BORDER=1>
+<TR><TD>Sample Frequency Harmonic</TD></TR>
+<TR><TD>Lower Quadrature Frequency</TD></TR>
+<TR><TD>Upper Quadrature Frequency</TD></TR>
+<TR><TD>Differential Frequency</TD></TR>
+</TABLE>
+
+<DIV ID=TABLE></DIV>
+
+</BODY>
+</HTML>

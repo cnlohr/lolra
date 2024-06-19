@@ -89,7 +89,14 @@ SOFTWARE.
 	Calculated to use the 19.75th harmonic @ 27.08571429MHz, but ideal found at 27.08643MHz
 */
 
-#define PWM_PERIOD 34
+#define Q 80
+
+#define PWM_PERIOD (31-1) //For 27.0857MHz
+#define QUADRATURE
+
+//#define PWM_PERIOD (32-1)
+//#define QUADRATURE
+#define PWM_OUTPUT 3
 
 #define ADC_BUFFSIZE 256
 volatile uint16_t adc_buffer[ADC_BUFFSIZE];
@@ -169,11 +176,14 @@ static void SetupTimer1()
 	TIM1->PSC = 0x0000;  // Prescalar to 0x0000 (so, 48MHz base clock)
 	TIM1->ATRLR = PWM_PERIOD;
 
-	// NOT USED
-	//TIM1->CCER = TIM_CC2E | TIM_CC2NP;  // CH2 is control for FET.
-	//TIM1->CHCTLR1 = TIM_OC2M_2 | TIM_OC2M_1;
+#ifdef PWM_OUTPUT
+	GPIOC->CFGLR &= ~(0xf<<(4*4));
+	GPIOC->CFGLR |= (GPIO_Speed_10MHz | GPIO_CNF_OUT_PP_AF)<<(4*4);
 
-	TIM1->CH2CVR = 0;  // Actual duty cycle (Off to begin with)
+	TIM1->CCER = TIM_CC4E | TIM_CC4P;
+	TIM1->CHCTLR2 = TIM_OC4M_2 | TIM_OC4M_1;
+	TIM1->CH4CVR = 5;  // Actual duty cycle (Off to begin with)
+#endif
 
 	// Setup TRGO for ADC.  This makes is to the ADC will trigger on timer
 	// reset, so we trigger at the same position every time relative to the
@@ -213,6 +223,7 @@ void InnerLoop()
 
 		while( adc != adc_buffer_end )
 		{
+#ifdef QUADRATURE
 			int32_t t = adc[0];
 			i += t; q += t;
 			t = adc[1];
@@ -223,16 +234,40 @@ void InnerLoop()
 			i += t; q -= t;
 			adc += 4;
 			frcnt += 4;
+#else
+			i = i + adc[0] - adc[1];
+			adc += 2;
+			frcnt += 2;
+#endif
+
 			if( adc == adc_buffer_top ) adc = adc_buffer;
 		}
 
-		if( frcnt > 8000 )
+		if( frcnt > Q )
 		{
+#ifdef QUADRATURE
+			int ti = i>>1;
+			int tq = q>>1;
+			int s = (ti*ti + tq*tq)>>8;
+#else
+			int s = i>>2;
+#endif
+
+#ifdef TIGHT_OUT
+			printf( "%d\n", i );
+#elif defined( PWM_OUTPUT )
+			int tv = (s>>PWM_OUTPUT) + (PWM_PERIOD/2);
+			if( tv < 0 ) tv = 0;
+			if( tv >= PWM_PERIOD ) tv = PWM_PERIOD-1;
+			TIM1->CH4CVR = tv;
+#else
 			int ti = i>>2;
 			int tq = q>>2;
 			int s = (ti*ti + tq*tq)>>8;
 			//s = usqrt4(s);
+
 			printf( "%8d I:%7d Q:%7d [%d %d %d %d] / %d\n",s, i ,q, adc_buffer[0], adc_buffer[1], adc_buffer[2], adc_buffer[3], SysTick->CNT - tstart );
+#endif
 			//printf( "%d\n", s );
 			frcnt = 0;
 			i = 0;
