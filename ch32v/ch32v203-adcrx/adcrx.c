@@ -67,7 +67,7 @@ SOFTWARE.
 
 #define Q 32
 
-#define PWM_PERIOD (40-1) //For 27.27MHz
+#define PWM_PERIOD (36-1) //For 27.0MHz
 #define QUADRATURE
 
 //#define PWM_PERIOD (32-1)
@@ -167,10 +167,9 @@ static void SetupTimer1()
 	TIM1->CH3CVR = 5;  // Actual duty cycle (Off to begin with)
 #endif
 
-	TIM1->CCER = TIM_CC1E | TIM_CC1P;
+	TIM1->CCER = TIM_CC1E;
 	TIM1->CHCTLR1 = TIM_OC1M_2 | TIM_OC1M_1;
 
-	TIM1->SWEVGR = TIM_CC1G | TIM_CC4G | TIM_COMG | TIM_TG;
 	TIM1->CH1CVR = 1;
 
 	// Setup TRGO for ADC.  This makes is to the ADC will trigger on timer
