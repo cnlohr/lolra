@@ -65,10 +65,12 @@ SOFTWARE.
 /* General note:
 */
 
-#define Q 32
+#define Q 1024
 
-#define PWM_PERIOD (36-1) //For 27.0MHz
+#define PWM_PERIOD (36-1) //For 26.0MHz??? Or not???  -- It appears to be good for *244 in the table?  WHY 26MHz???!?!!?
+#define TIGHT_OUT 1
 #define QUADRATURE
+//#define DUMPBUFF
 
 //#define PWM_PERIOD (32-1)
 //#define QUADRATURE
@@ -119,7 +121,7 @@ void SetupADC()
 	while(ADC1->CTLR2 & ADC_CAL);
 
 	// ADC_SCAN: Allow scanning.
-	ADC1->CTLR1 = 0;// (1<<26); // | (1<<26); // + Buffer
+	ADC1->CTLR1 = ADC_SCAN;// (1<<26); // | (1<<26); // + Buffer
 
 	// Turn on DMA
 	RCC->AHBPCENR |= RCC_AHBPeriph_DMA1;
@@ -169,13 +171,10 @@ static void SetupTimer1()
 
 	TIM1->CCER = TIM_CC1E;
 	TIM1->CHCTLR1 = TIM_OC1M_2 | TIM_OC1M_1;
-
 	TIM1->CH1CVR = 1;
 
-	// Setup TRGO for ADC.  This makes is to the ADC will trigger on timer
-	// reset, so we trigger at the same position every time relative to the
-	// FET turning on.
-	TIM1->CTLR2 = TIM_MMS_1;
+	// Setup TRGO to trigger for ADC (NOTE: Not on the 203! TIM1_TRGO is only connected to injection)
+	//TIM1->CTLR2 = TIM_MMS_1;
 
 	// Enable TIM1 outputs
 	TIM1->BDTR = TIM_MOE;
@@ -201,6 +200,14 @@ void InnerLoop()
 
 	int tstart = 0;
 
+#ifdef DUMPBUFF
+	uint16_t shadowbuff[Q+16];
+	int shadowplace = 0;
+	#define SHADOWSTORE(X) shadowbuff[frcnt+X] = t;
+#else
+	#define SHADOWSTORE(X)
+#endif
+
 	while( 1 )
 	{
 		tpl = ADC_BUFFSIZE - DMA1_Channel1->CNTR; // Warning, sometimes this is == to the base, or == 0 (i.e. might be 256, if top is 255)
@@ -211,13 +218,13 @@ void InnerLoop()
 		while( adc != adc_buffer_end )
 		{
 #ifdef QUADRATURE
-			int32_t t = adc[0];
+			int32_t t = adc[0]; SHADOWSTORE(0);
 			i += t; q += t;
-			t = adc[1];
+			t = adc[1]; SHADOWSTORE(1);
 			i -= t; q += t;
-			t = adc[2];
+			t = adc[2]; SHADOWSTORE(2);
 			i -= t; q -= t;
-			t = adc[3];
+			t = adc[3]; SHADOWSTORE(3);
 			i += t; q -= t;
 			adc += 4;
 			frcnt += 4;
@@ -228,27 +235,38 @@ void InnerLoop()
 #endif
 
 			if( adc == adc_buffer_top ) adc = adc_buffer;
+			if( frcnt >= Q ) break;
 		}
-//printf( "%d\n", frcnt );
 
-		if( frcnt > Q )
+
+		if( frcnt >= Q )
 		{
+
+#ifdef DUMPBUFF
+		int j;
+		for( j = 0; j < Q; j++ )
+			printf( "%d,%d\n", j, shadowbuff[j] );
+#endif
 #ifdef QUADRATURE
 			int ti = i>>1;
 			int tq = q>>1;
-			int s = (ti*ti + tq*tq)>>8;
+			int is = (ti*ti + tq*tq)>>8;
 #else
-			int s = i>>2;
+			int is = i>>2;
 #endif
+		    int s = 1<<( ( 32 - __builtin_clz(is) )/2);
+    		s = (s + is/s)/2;
+
 
 #ifdef TIGHT_OUT
-			printf( "%d\n", i );
+			printf( "%d\n", s );
 #elif defined( PWM_OUTPUT )
 			int tv = (s>>PWM_OUTPUT) + (PWM_PERIOD/2);
 			if( tv < 0 ) tv = 0;
 			if( tv >= PWM_PERIOD ) tv = PWM_PERIOD-1;
 			TIM1->CH3CVR = tv;
 #else
+
 			printf( "%8d I:%7d Q:%7d [%d %d %d %d] / %d\n",s, i ,q, adc_buffer[0], adc_buffer[1], adc_buffer[2], adc_buffer[3], (int)(SysTick->CNT - tstart) );
 #endif
 			//printf( "%d\n", s );
