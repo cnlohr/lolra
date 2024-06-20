@@ -1,4 +1,3 @@
-//XXX DOES NOT CURRENTLY WORK XXX
 /**
 
 MIT-like-non-ai-license
@@ -67,7 +66,7 @@ SOFTWARE.
 
 #define Q 1024
 
-#define PWM_PERIOD (36-1) //For 26.0MHz??? Or not???  -- It appears to be good for *244 in the table?  WHY 26MHz???!?!!?
+#define PWM_PERIOD (36-1) //For 27.0MHz -- It appears to be good for *244 in the table?  WHY 26MHz???!?!!?
 #define TIGHT_OUT 1
 #define QUADRATURE
 //#define DUMPBUFF
@@ -121,7 +120,8 @@ void SetupADC()
 	while(ADC1->CTLR2 & ADC_CAL);
 
 	// ADC_SCAN: Allow scanning.
-	ADC1->CTLR1 = ADC_SCAN;// (1<<26); // | (1<<26); // + Buffer
+	ADC1->CTLR1 = /*ADC_Pga_64 | */ADC_SCAN;
+
 
 	// Turn on DMA
 	RCC->AHBPCENR |= RCC_AHBPeriph_DMA1;
@@ -248,8 +248,8 @@ void InnerLoop()
 			printf( "%d,%d\n", j, shadowbuff[j] );
 #endif
 #ifdef QUADRATURE
-			int ti = i>>1;
-			int tq = q>>1;
+			int ti = i>>3;
+			int tq = q>>3;
 			int is = (ti*ti + tq*tq)>>8;
 #else
 			int is = i>>2;
@@ -295,14 +295,19 @@ int main()
 	SystemInit();
 
 	SysTick->CTLR = (1<<2) | 1; // HCLK
-
 	Delay_Ms(100);
+
 	printf( "System On\n" );
 
 	// x18; 8MHz x 18 = 144 MHz
 	RCC->CFGR0 &= ~RCC_PPRE2; // No divisor on APB1/2
 	RCC->CFGR0 &= ~RCC_PPRE1;
 	RCC->CFGR0 |= RCC_PLLMULL_0 | RCC_PLLMULL_1 | RCC_PLLMULL_2 | RCC_PLLMULL_3;
+
+	Delay_Ms(50);
+
+	// Disable HSI
+	RCC->CTLR &= ~(RCC_HSION);
 
 //	printf( "RCC: %08x\n", (RCC->CFGR0) );
 	RCC->AHBPCENR |= 3; //DMA2EN | DMA1EN

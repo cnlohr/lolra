@@ -1,6 +1,8 @@
 // XXX TODO: Play with high bits of ADC control to see if there's a gain cicuit.
 // XXX TODO: Try to see if there is a way to tightly  control Q, right now it's kinda random.
 // XXX TODO: It looks like our loop can exit early - or more specifically we can "wrap around" our data because adc may not be == because it is skipping numbers
+// XXX TODO: Verify it's actually using the HSE.
+
 /**
 
 MIT-like-non-ai-license
