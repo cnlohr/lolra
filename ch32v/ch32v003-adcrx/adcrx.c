@@ -1,7 +1,4 @@
 // XXX TODO: Play with high bits of ADC control to see if there's a gain cicuit.
-// XXX TODO: Try to see if there is a way to tightly  control Q, right now it's kinda random.
-// XXX TODO: It looks like our loop can exit early - or more specifically we can "wrap around" our data because adc may not be == because it is skipping numbers
-// XXX TODO: Verify it's actually using the HSE.
 
 /**
 
@@ -94,22 +91,27 @@ SOFTWARE.
 	Calculated to use the 19.75th harmonic @ 27.08571429MHz, but ideal found at 27.08643MHz
 */
 
-#define Q 80
+#define Q 1800
 
-#define PWM_PERIOD (31-1) //For 27.0857MHz
-#define QUADRATURE
+
+// For Quadrature - use 30
+// For nonquadrature use 40.
+
+#define PWM_PERIOD (40-1) //For 27MHz
+//#define QUADRATURE
+//#define TIGHT_OUT
+//#define DUMPBUFF
+#define PWM_OUTPUT 1
 
 //#define PWM_PERIOD (32-1)
 //#define QUADRATURE
-#define PWM_OUTPUT 3
+//#define PWM_OUTPUT 3
 
 #define ADC_BUFFSIZE 256
 volatile uint16_t adc_buffer[ADC_BUFFSIZE];
 
 void SetupADC()
 {
-	// PD4 is analog input chl 7
-	GPIOD->CFGLR &= ~(0xf<<(4*4));	// CNF = 00: Analog, MODE = 00: Input
 	
 	// Reset the ADC to init all regs
 	RCC->APB2PRSTR |= RCC_APB2Periph_ADC1;
@@ -125,6 +127,9 @@ void SetupADC()
 	ADC1->RSQR3 = 7;	// 0-9 for 8 ext inputs and two internals
 
 	// Not using injection group.
+
+	// PD4 is analog input chl 7
+	GPIOD->CFGLR &= ~(0xf<<(4*4));	// CNF = 00: Analog, MODE = 00: Input
 
 	// Sampling time for channels. Careful: This has PID tuning implications.
 	// Note that with 3 and 3,the full loop (and injection) runs at 138kHz.
@@ -219,23 +224,31 @@ void InnerLoop()
 
 	int tstart = 0;
 
+#ifdef DUMPBUFF
+	uint16_t shadowbuff[Q+16];
+	int shadowplace = 0;
+	#define SHADOWSTORE(X) shadowbuff[frcnt+X] = t;
+#else
+	#define SHADOWSTORE(X)
+#endif
+
 	while( 1 )
 	{
 		tpl = ADC_BUFFSIZE - DMA1_Channel1->CNTR; // Warning, sometimes this is == to the base, or == 0 (i.e. might be 256, if top is 255)
 		if( tpl == ADC_BUFFSIZE ) tpl = 0;
 
 		adc_buffer_end = adc_buffer + ( ( tpl / 4) * 4 );
-
+//printf( "%3d %4d %d %04x\n", DMA1_Channel1->CNTR, TIM1->CNT, ADC1->RDATAR, ADC1->STATR );
 		while( adc != adc_buffer_end )
 		{
 #ifdef QUADRATURE
-			int32_t t = adc[0];
+			int32_t t = adc[0]; SHADOWSTORE(0);
 			i += t; q += t;
-			t = adc[1];
+			t = adc[1]; SHADOWSTORE(1);
 			i -= t; q += t;
-			t = adc[2];
+			t = adc[2]; SHADOWSTORE(2);
 			i -= t; q -= t;
-			t = adc[3];
+			t = adc[3]; SHADOWSTORE(3);
 			i += t; q -= t;
 			adc += 4;
 			frcnt += 4;
@@ -246,37 +259,46 @@ void InnerLoop()
 #endif
 
 			if( adc == adc_buffer_top ) adc = adc_buffer;
+			if( frcnt >= Q ) break;
 		}
 
-		if( frcnt > Q )
+
+		if( frcnt >= Q )
 		{
-#ifdef QUADRATURE
-			int ti = i>>1;
-			int tq = q>>1;
-			int s = (ti*ti + tq*tq)>>8;
-#else
-			int s = i>>2;
+
+#ifdef DUMPBUFF
+		int j;
+		for( j = 0; j < Q; j++ )
+			printf( "%d,%d\n", j, shadowbuff[j] );
 #endif
+#ifdef QUADRATURE
+			int ti = i>>3;
+			int tq = q>>3;
+			int is = (ti*ti + tq*tq)>>8;
+#else
+			int is = ((i<0)?-i:i)>>2;
+#endif
+		    int s = 1<<( ( 32 - __builtin_clz(is) )/2);
+    		s = (s + is/s)/2;
+
 
 #ifdef TIGHT_OUT
-			printf( "%d\n", i );
+			printf( "%d\n", s );
 #elif defined( PWM_OUTPUT )
 			int tv = (s>>PWM_OUTPUT) + (PWM_PERIOD/2);
 			if( tv < 0 ) tv = 0;
 			if( tv >= PWM_PERIOD ) tv = PWM_PERIOD-1;
-			TIM1->CH4CVR = tv;
+			TIM1->CH3CVR = tv;
 #else
-			int ti = i>>2;
-			int tq = q>>2;
-			int s = (ti*ti + tq*tq)>>8;
-			//s = usqrt4(s);
 
-			printf( "%8d I:%7d Q:%7d [%d %d %d %d] / %d\n",s, i ,q, adc_buffer[0], adc_buffer[1], adc_buffer[2], adc_buffer[3], SysTick->CNT - tstart );
+			printf( "%8d I:%7d Q:%7d [%d %d %d %d] / %d\n",s, i ,q, adc_buffer[0], adc_buffer[1], adc_buffer[2], adc_buffer[3], (int)(SysTick->CNT - tstart) );
 #endif
 			//printf( "%d\n", s );
 			frcnt = 0;
 			i = 0;
 			q = 0;
+			tpl = ADC_BUFFSIZE - DMA1_Channel1->CNTR;
+			adc = adc_buffer + ( ( tpl / 4) * 4 );
 			tstart = SysTick->CNT;
 		}
 /*
@@ -290,6 +312,7 @@ void InnerLoop()
 */
 	}
 
+
 }
 
 int main()
@@ -299,6 +322,8 @@ int main()
 
 	SystemInit();
 
+	Delay_Ms(10);
+
 	printf( "System On\n" );
 
 	// Enable Peripherals
@@ -307,6 +332,11 @@ int main()
 		RCC_APB2Periph_AFIO;
 
 	RCC->APB1PCENR = RCC_APB1Periph_TIM2;
+
+	// Disable HSI
+	RCC->CTLR &= ~(RCC_HSION);
+
+	printf( "CTLR: %08x CFGR0: %08x\n", RCC->CTLR, RCC->CFGR0 );
 
 	SetupADC();
 
