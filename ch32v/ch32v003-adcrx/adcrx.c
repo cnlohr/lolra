@@ -91,18 +91,13 @@ SOFTWARE.
 	Calculated to use the 19.75th harmonic @ 27.08571429MHz, but ideal found at 27.08643MHz
 */
 
-#define Q 2080
+#define Q 1000
 
-
-// For Quadrature - use 30
-// For nonquadrature use 40.
-
-#define PWM_PERIOD (28-1) //For 27MHz
-#define QUADRATURE
+#define PWM_PERIOD (28-1) //For 27.000500MHz
+//#define QUADRATURE
 //#define TIGHT_OUT
 //#define DUMPBUFF
-
-#define PWM_OUTPUT 9
+#define PWM_OUTPUT 7
 
 //#define PWM_PERIOD (32-1)
 //#define QUADRATURE
@@ -283,14 +278,15 @@ void InnerLoop()
 		    int s = 1<<( ( 32 - __builtin_clz(is) )/2);
     		s = (s + is/s)/2;
 
+#ifdef TIGHT_OUT
+			printf( "%d\n", is );
+#elif defined( PWM_OUTPUT )
+
 
 			int tv = (i>>PWM_OUTPUT) + (PWM_PERIOD/2);
 			if( tv < 0 ) tv = 0;
 			if( tv >= PWM_PERIOD ) tv = PWM_PERIOD-1;
 
-#ifdef TIGHT_OUT
-			printf( "%d\n", tv );
-#elif defined( PWM_OUTPUT )
 			TIM1->CH4CVR = tv;
 #else
 
