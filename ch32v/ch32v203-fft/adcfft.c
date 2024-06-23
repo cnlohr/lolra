@@ -72,11 +72,13 @@ SOFTWARE.
 /* General note:
 */
 
-#define Q 128
+#define Q 256
 
-#define PWM_PERIOD (36-1) //For 27.0MHz -- It appears to be good for *244 in the table?  WHY 26MHz???!?!!?
+#define TARGET_BIN 51
 
-#define ADC_BUFFSIZE 256
+#define PWM_PERIOD (31-1) //For 27.0MHz, use 36MHz if quadrature -- It appears to be good for *244 in the table?  WHY 26MHz???!?!!?
+
+#define ADC_BUFFSIZE 512
 volatile uint16_t adc_buffer[ADC_BUFFSIZE];
 
 void SetupADC()
@@ -188,8 +190,8 @@ void InnerLoop() __attribute__((noreturn));
 
 void InnerLoop()
 {
-	int i = 0;
-	int q = 0;
+	//int i = 0;
+	//int q = 0;
 	int tpl = 0;
 
 	// Timer goes backwards when we are moving forwards.
@@ -204,11 +206,15 @@ void InnerLoop()
 	int16_t shadowbuff[Q+16];
 
 	int shadowplace = 0;
-	#define SHADOWSTORE(X) shadowbuff[frcnt+X] = t<<3;
+	#define SCALEUP 6
+	#define SHADOWSTORE(X) shadowbuff[frcnt+X] = t;
 
 	while( 1 )
 	{
 		tpl = ADC_BUFFSIZE - DMA1_Channel1->CNTR; // Warning, sometimes this is == to the base, or == 0 (i.e. might be 256, if top is 255)
+
+		tpl += ADC_BUFFSIZE;
+		tpl = (tpl & (ADC_BUFFSIZE-1));
 		if( tpl == ADC_BUFFSIZE ) tpl = 0;
 
 		adc_buffer_end = adc_buffer + ( ( tpl / 4) * 4 );
@@ -217,13 +223,13 @@ void InnerLoop()
 		{
 
 			int32_t t = adc[0]; SHADOWSTORE(0);
-			i += t; q += t;
+			//i += t; q += t;
 			t = adc[1]; SHADOWSTORE(1);
-			i -= t; q += t;
+			//i -= t; q += t;
 			t = adc[2]; SHADOWSTORE(2);
-			i -= t; q -= t;
+			//i -= t; q -= t;
 			t = adc[3]; SHADOWSTORE(3);
-			i += t; q -= t;
+			//i += t; q -= t;
 			adc += 4;
 			frcnt += 4;
 
@@ -267,15 +273,41 @@ void InnerLoop()
 			//printf( "%d\n", s );
 #endif
 			int k;
+
+	//		printf( "Data: " );
+			for( k = 0; k < Q; k++ )
+			{
+		//		printf( "%d, ",shadowbuff[k] );
+				shadowbuff[k] = (shadowbuff[k]<<SCALEUP)-32768;
+			}
+			//printf( "\n" );
+
 			int osb = shadowbuff[0];
 			int16_t FSQ[Q] = { 0 };
 			for( k = 0; k < 128; k++ )
 			{
-				ssd1306_drawPixel( k, ((shadowbuff[k]-osb)>>3)+32, 1 );
+				ssd1306_drawPixel( k, ((shadowbuff[k+128]-osb)>>(SCALEUP+1))+40, 1 );
 			}
+
+			int16_t imag[Q] = { 0 };
+
 			int r = 
+				fix_fft(shadowbuff, imag, 8, 0);
+
 					//fix_fftr(shadowbuff, 7 /*1<<7 = 128 bins wide*/, 0);
-					fix_fft(shadowbuff, FSQ, 7 /*1<<7 = 128 bins wide*/, 0);
+					//fix_fft(shadowbuff, FSQ, 8 /*1<<7 = 128 bins wide*/, 0);
+
+//			printf( "FFT: 
+//			for( k = 0; k < 128; k++ )
+//			{
+//			}
+
+			int targbin = TARGET_BIN;
+			int targv = 0;
+			int maxbin = 0;
+			int maxbinv = 0;
+
+
 			for( k = 0; k < 128; k++ )
 			{
 /*
@@ -289,7 +321,34 @@ void InnerLoop()
 				// for real
 				//	int x = shadowbuff[(k>>1) | ((k&64)>>6)];
 				// For faked imag
-					int x = shadowbuff[ k ];
+
+#if 0
+				int s = shadowbuff[k] * shadowbuff[k] + shadowbuff[255-k]*shadowbuff[255-k];
+				//if( s == 0 ) continue;
+				int x = 1<<( ( 32 - __builtin_clz(s) )/2);
+				x = (x + s/x)/2;
+				x = (x + s/x)/2; //Not really needed.
+				x = (x + s/x)/2; //Not really needed.
+				
+				//x = shadowbuff[ k ];
+				//x = s >> 8;
+
+				x = x >> 2;
+#endif
+
+				int s = shadowbuff[k] * shadowbuff[k] + imag[k]*imag[k];
+				//if( s == 0 ) continue;
+				int x = 1<<( ( 32 - __builtin_clz(s) )/2);
+				x = (x + s/x)/2;
+				x = (x + s/x)/2; //Not really needed.
+				x = (x + s/x)/2; //Not really needed.
+				
+				//x = shadowbuff[ k ];
+				//x = s >> 8;
+
+				//x = x >> 2;
+				if( x > maxbinv && k != 0) { maxbinv = x; maxbin = k; }
+				if( k == targbin ) targv = x;
 
 				x++;
 				if( x < 0 ) x = 0;
@@ -297,12 +356,22 @@ void InnerLoop()
 				if( x != 0 )
 					ssd1306_drawFastVLine( k, 127-x, x, 1 );
 
-				if( k== 0 )
-				{
-					char cts[16];
-					snprintf( cts, sizeof(cts), "%7d%5d", x, osb );
-					ssd1306_drawstr( 0, 0, cts, 1 );
-				}
+			}
+
+			static int tbhist[128];
+			static int tbhead = 0;
+			tbhist[tbhead++] = targv;
+			if( tbhead == 128 ) tbhead = 0;
+
+			char cts[32];
+			snprintf( cts, sizeof(cts), "%5d%5d@%d", osb, targv, targbin );
+			ssd1306_drawstr( 0, 0, cts, 1 );
+			snprintf( cts, sizeof(cts), "P:%d B%3d/%4d", PWM_PERIOD, maxbin, maxbinv );
+			ssd1306_drawstr( 0, 8, cts, 1 );
+
+			for( k = 0; k < 128; k++ )
+			{
+				ssd1306_drawPixel( k, 105-tbhist[(tbhead-k+256)%128]/2, 1);	
 			}
 
 			memset( shadowbuff, 0, sizeof( shadowbuff ) );
@@ -311,8 +380,8 @@ void InnerLoop()
 			ssd1306_setbuf(0);
 
 			frcnt = 0;
-			i = 0;
-			q = 0;
+//			i = 0;
+//			q = 0;
 			tpl = ADC_BUFFSIZE - DMA1_Channel1->CNTR;
 			adc = adc_buffer + ( ( tpl / 4) * 4 );
 			tstart = SysTick->CNT;
@@ -339,17 +408,33 @@ int main()
 
 	printf( "System On\n" );
 
+	RCC->CTLR |= RCC_HSEON;
+	while( ! ( RCC->CTLR & RCC_HSERDY ) );
+
+	RCC->CFGR0 = (RCC->CFGR0 & ~RCC_SW) | RCC_SW_HSE;
+
+	RCC->CTLR &= ~RCC_PLLON;
+
+	// Switch PLL to HSE.
+	RCC->CFGR0 |= RCC_PLLSRC;
+
 	// x18; 8MHz x 18 = 144 MHz
 	RCC->CFGR0 &= ~RCC_PPRE2; // No divisor on APB1/2
 	RCC->CFGR0 &= ~RCC_PPRE1;
 	RCC->CFGR0 |= RCC_PLLMULL_0 | RCC_PLLMULL_1 | RCC_PLLMULL_2 | RCC_PLLMULL_3;
 
-	Delay_Ms(50);
+	RCC->CTLR |= RCC_PLLON;
+
+	// Switch to PLL
+	RCC->CFGR0 = (RCC->CFGR0 & ~RCC_SW) | RCC_SW_PLL;
 
 	// Disable HSI
 	RCC->CTLR &= ~(RCC_HSION);
 
-//	printf( "RCC: %08x\n", (RCC->CFGR0) );
+	Delay_Ms(10);
+
+
+	printf( "CTLR: %08x / CFGR0: %08x\n", (RCC->CTLR), (RCC->CFGR0) );
 	RCC->AHBPCENR |= 3; //DMA2EN | DMA1EN
 	RCC->APB2PCENR |= RCC_APB2Periph_TIM1 | RCC_APB2Periph_ADC1 | RCC_APB2Periph_ADC2 | 0x07; // Enable all GPIO
 	RCC->APB1PCENR |= RCC_APB1Periph_TIM2;
