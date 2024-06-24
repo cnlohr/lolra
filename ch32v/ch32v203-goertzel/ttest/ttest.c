@@ -3,7 +3,7 @@
 #include <stdint.h>
 
 uint32_t g_goertzel_omega_per_sample;
-uint32_t g_goertzel_coefficient;
+int32_t g_goertzel_coefficient;
 int32_t g_goertzel_coefficient_s;
 uint32_t g_goertzel_samples;
 uint32_t g_goertzel_outs;
@@ -12,23 +12,23 @@ int32_t g_goertzelp_store, g_goertzelp2_store;
 
 int main()
 {
-	
-	g_goertzel_omega_per_sample = 4.0/128 * 3.1415926535*2.0*65536;
-	g_goertzel_coefficient   = 2 * cos( g_goertzel_omega_per_sample / 65536.0 ) * 65536;
-	g_goertzel_coefficient_s = 2 * sin( g_goertzel_omega_per_sample / 65536.0 ) * 65536;
+	//XXX XXX NOTE If you are computing the coefficients, you can plug the value in here.
+	g_goertzel_omega_per_sample = (47.0/256) * 3.1415926535*2.0*(1<<29);
+	g_goertzel_coefficient   = 2 * cos( g_goertzel_omega_per_sample / (double)(1<<29) ) * (1<<30);
+	g_goertzel_coefficient_s = 2 * sin( g_goertzel_omega_per_sample / (double)(1<<29) ) * (1<<30);
 
 
-	const double AomegaPerSample = g_goertzel_omega_per_sample/65536.0;
+	const double AomegaPerSample = g_goertzel_omega_per_sample/(double)(1<<29);
 	const int AnumSamples = 256; // enough to go from 0 to 2pi
 	double Acoeff   = 2 * cos( AomegaPerSample ) * 65536;
 	double Acoeff_s = 2 * sin( AomegaPerSample ) * 65536;
 	double Asprev = AomegaPerSample * 65536;
 	double Asprev2 = 0;
 
-printf( "%d / %d / %d    %f / %f / %f\n", g_goertzel_omega_per_sample, g_goertzel_coefficient, g_goertzel_coefficient_s, Acoeff, Acoeff_s, AomegaPerSample );
+	printf( "%d / %d / %d    %f / %f / %f\n", g_goertzel_omega_per_sample, g_goertzel_coefficient, g_goertzel_coefficient_s, Acoeff, Acoeff_s, AomegaPerSample );
 
 
-	g_goertzelp = g_goertzel_omega_per_sample;
+	g_goertzelp = g_goertzel_omega_per_sample>>(29-16);
 
 	int32_t goertzel_coefficient = g_goertzel_coefficient;
 	int32_t goertzelp2 = g_goertzelp2;
@@ -48,11 +48,10 @@ printf( "%d / %d / %d    %f / %f / %f\n", g_goertzel_omega_per_sample, g_goertze
 			int32_t goertzel;
 
 			#define ITERATION(x)  \
-				t = sin(  AomegaPerSample * (x+js*4) ) * 32768; \
+				t = sin(  AomegaPerSample * (x+js*4) ) * 16384*0; \
 \
 				/* Fixed */ \
-				printf( ">> %d + %d((%d<<8*%d<<8)>>32) - %d -", t, ( ( ((int64_t)(goertzel_coefficient)<<8) * (int64_t)(goertzelp<<8) ) >> 32 ), goertzel_coefficient, goertzelp, goertzelp2 ); \
-				goertzel = t + ( ( ((int64_t)(goertzel_coefficient)<<8) * (int64_t)(goertzelp<<8) ) >> 32 ) - goertzelp2; \
+				goertzel = t + ( ( (((int32_t)(goertzel_coefficient))) * ((((int64_t)goertzelp)<<2)) ) >> 32 ) - goertzelp2; \
 				goertzelp2 = goertzelp; \
 				goertzelp = goertzel; \
 \
@@ -64,11 +63,11 @@ printf( "%d / %d / %d    %f / %f / %f\n", g_goertzel_omega_per_sample, g_goertze
 /*printf( "%d,%d,%d,%d\n", ( ( (int64_t)(goertzel_coefficient) * (int64_t)goertzelp ) >> 32 ) , goertzel_coefficient, goertzelp, goertzelp2 ); */ \
 \
 		{\
-		int32_t rr = (((int64_t)(g_goertzel_coefficient  << 15)  * (int64_t)goertzelp)>>32) - (goertzelp2); \
-		int32_t ri = (((int64_t)(g_goertzel_coefficient_s << 15) * (int64_t)goertzelp)>>32); \
+		int32_t rr = (((int64_t)(g_goertzel_coefficient  ) * (int64_t)goertzelp<<1)>>32) - (goertzelp2); \
+		int32_t ri = (((int64_t)(g_goertzel_coefficient_s) * (int64_t)goertzelp<<1)>>32); \
 		/*printf( "%3d %10d %10d %10d %10d / %9d %9d %9d * ", js*4+x, rr, ri, goertzelp, goertzelp2, goertzel_coefficient, g_goertzel_omega_per_sample, t );*/ \
 		/*printf( "%4d %10d %10d (%10d %10d) ", js*4+x, goertzelp, goertzelp2, goertzel_coefficient, g_goertzel_coefficient_s );*/ \
-		printf( "%4d %10d %10d (%10d [%d+%d*=%lld] %10d) ", js*4+x, goertzelp, goertzelp2, rr, t, g_goertzel_coefficient, ( ( (int64_t)(goertzel_coefficient<<8) * (int64_t)(goertzelp2<<8) ) >> 32 ), ri ); \
+		printf( "%4d %10d %10d (%10d %10d) ", js*4+x, goertzelp, goertzelp2, rr, ri ); \
 \
 		float Apower = Asprev*Asprev + Asprev2*Asprev2 - (Acoeff * Asprev * Asprev2); \
 		double ArR = 0.5 * Acoeff   * Asprev / 65536 - Asprev2; \
@@ -105,6 +104,8 @@ printf( "%d / %d / %d    %f / %f / %f\n", g_goertzel_omega_per_sample, g_goertze
 	g_goertzelp2 = goertzelp2;
 	g_goertzelp = goertzelp;
 	g_goertzel_samples = goertzel_samples;
+
+	printf( "Constants:\nconst int32_t g_goertzel_omega_per_sample = %d;\nconst int32_t g_goertzel_coefficient = %d;\nconst int32_t g_goertzel_coefficient_s = %d;\n", g_goertzel_omega_per_sample, g_goertzel_coefficient, g_goertzel_coefficient_s );
 
 }
 

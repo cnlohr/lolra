@@ -71,7 +71,19 @@ SOFTWARE.
 #define PWM_PERIOD (31-1) //For 27.0MHz, use 36MHz if quadrature -- It appears to be good for *244 in the table?  WHY 26MHz???!?!!?
 
 #define ADC_BUFFSIZE 512
+
+#define GOERTZEL_BUFFER 8192
+
 volatile uint16_t adc_buffer[ADC_BUFFSIZE];
+
+//const int32_t g_goertzel_omega_per_sample = 151198; // 51/128 * 3.14159 * 65536 * 2
+//const int32_t g_goertzel_coefficient   = -88021;//2 * cos( g_goertzel_omega_per_sample / 65536 * 180 / 3.141592) * 65536;
+//const int32_t g_goertzel_coefficient_s = 97118;//2 * sin( g_goertzel_omega_per_sample / 65536 * 180 / 3.141592 ) * 65536;
+const int32_t g_goertzel_omega_per_sample = 1238618695; // 47/256 -> 27.01920 MHz
+const int32_t g_goertzel_coefficient = 870249096;
+const int32_t g_goertzel_coefficient_s = 1963250500;
+
+
 
 void SetupADC()
 {
@@ -193,10 +205,6 @@ uint32_t tc;
 volatile uint16_t * adc_tail = adc_buffer;
 
 
-const uint32_t g_goertzel_omega_per_sample = 41016; // 51/128 * 3.14159 * 65536
-const uint32_t g_goertzel_coefficient   = 106228;//2 * cos( g_goertzel_omega_per_sample / 65536 * 180 / 3.141592) * 65536;
-const uint32_t g_goertzel_coefficient_s = 76781;//2 * sin( g_goertzel_omega_per_sample / 65536 * 180 / 3.141592 ) * 65536;
-
 uint32_t g_goertzel_samples;
 uint32_t g_goertzel_outs;
 int32_t g_goertzelp, g_goertzelp2;
@@ -237,26 +245,40 @@ void DMA1_Channel1_IRQHandler( void )
 			// Here is where the magic happens.
 			int32_t goertzel;
 
-			#define ITERATION(x)  \
-				t = (adc_tail[x] - 2048)<<8; \
-				goertzel = t +  ( ( (int64_t)(goertzel_coefficient) * goertzelp ) >> 32 ) - goertzelp2; \
-				goertzelp2 = goertzelp; \
-				goertzelp = goertzel; \
+			#define INFADC 2
+			const int ofs = (-2048) << INFADC;
 
-			ITERATION( 0 );
-			ITERATION( 1 );
-			ITERATION( 2 );
-			ITERATION( 3 );
+			t = ((adc_tail[0])<<INFADC)+ofs;
+				goertzel = t + ( ( (((int32_t)(goertzel_coefficient))) * ((((int64_t)goertzelp)<<2)) ) >> 32 ) - goertzelp2;
+				goertzelp2 = goertzelp;
+				goertzelp = goertzel;
+
+			t = ((adc_tail[1])<<INFADC)+ofs;
+				goertzel = t + ( ( (((int32_t)(goertzel_coefficient))) * ((((int64_t)goertzelp)<<2)) ) >> 32 ) - goertzelp2;
+				goertzelp2 = goertzelp;
+				goertzelp = goertzel;
+
+			t = ((adc_tail[2])<<INFADC)+ofs;
+				goertzel = t + ( ( (((int32_t)(goertzel_coefficient))) * ((((int64_t)goertzelp)<<2)) ) >> 32 ) - goertzelp2;
+				goertzelp2 = goertzelp;
+				goertzelp = goertzel;
+
+			t = ((adc_tail[3])<<INFADC)+ofs;
+				goertzel = t + ( ( (((int32_t)(goertzel_coefficient))) * ((((int64_t)goertzelp)<<2)) ) >> 32 ) - goertzelp2;
+				goertzelp2 = goertzelp;
+				goertzelp = goertzel;
+
 
 			adc_tail+=4;
 			goertzel_samples+=4;
 			if( adc_tail == adc_buffer_top ) adc_tail = adc_buffer;
-			if( goertzel_samples == 128 )
+			if( goertzel_samples == GOERTZEL_BUFFER )
 			{
-				g_goertzelp_store = goertzelp;
+				g_goertzelp_store = goertzelp - (g_goertzel_omega_per_sample>>(29-16));
 				g_goertzelp2_store = goertzelp2;
 
-				goertzelp = 0;
+
+				goertzelp = g_goertzel_omega_per_sample>>(29-16);
 				goertzelp2 = 0;
 
 				g_goertzel_outs++;
@@ -294,7 +316,17 @@ void InnerLoop()
 		ssd1306_refresh();
 		ssd1306_setbuf(0);
 
-		printf( "%3d %6d %6d\n", g_goertzel_outs,g_goertzelp2_store, g_goertzelp_store );
+		int32_t rr = (((int64_t)(g_goertzel_coefficient  ) * (int64_t)g_goertzelp_store<<1)>>32) - (g_goertzelp2_store); \
+		int32_t ri = (((int64_t)(g_goertzel_coefficient_s) * (int64_t)g_goertzelp_store<<1)>>32); \
+
+		rr>>=4;
+		ri>>=4;
+		int s = rr * rr + ri * ri;
+		int x = 1<<( ( 32 - __builtin_clz(s) )/2);
+		x = (x + s/x)/2;
+		x = (x + s/x)/2;
+
+		printf( "%6d %8d %8d - %8d %8d - %8d\n", g_goertzel_outs,g_goertzelp2_store, g_goertzelp_store, rr, ri, x );
 //		Delay_Ms(940);
 	}
 
