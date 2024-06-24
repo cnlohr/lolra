@@ -72,7 +72,7 @@ SOFTWARE.
 
 #define ADC_BUFFSIZE 512
 
-#define GOERTZEL_BUFFER 8192
+#define GOERTZEL_BUFFER 16384
 
 volatile uint16_t adc_buffer[ADC_BUFFSIZE];
 
@@ -401,6 +401,10 @@ void InnerLoop()
 		x = (x + s/x)/2;
 		x = (x + s/x)/2;
 
+		char cts[32];
+		snprintf( cts, 32, "%6d", x );
+		ssd1306_drawstr( 0, 0, cts, 1 );
+		
 //		printf( "%6d %8d %8d - %8d %8d - %8d\n", g_goertzel_outs,g_goertzelp2_store, g_goertzelp_store, rr, ri, x );
 
 //		Delay_Ms(940);
