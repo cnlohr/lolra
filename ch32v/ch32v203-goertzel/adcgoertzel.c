@@ -68,20 +68,32 @@ SOFTWARE.
 #include "ssd1306.h"
 
 
-#define PWM_PERIOD (31-1)
-
 #define ADC_BUFFSIZE 512
 
-#define GOERTZEL_BUFFER 16384
+#define GOERTZEL_BUFFER 8192
 
 volatile uint16_t adc_buffer[ADC_BUFFSIZE];
 
-//const int32_t g_goertzel_omega_per_sample = 151198; // 51/128 * 3.14159 * 65536 * 2
-//const int32_t g_goertzel_coefficient   = -88021;//2 * cos( g_goertzel_omega_per_sample / 65536 * 180 / 3.141592) * 65536;
-//const int32_t g_goertzel_coefficient_s = 97118;//2 * sin( g_goertzel_omega_per_sample / 65536 * 180 / 3.141592 ) * 65536;
-const int32_t g_goertzel_omega_per_sample = 1238618695; // 47/256 -> 27.01920 MHz
-const int32_t g_goertzel_coefficient = 870249096;
-const int32_t g_goertzel_coefficient_s = 1963250500;
+//#define PWM_PERIOD (31-1)
+//const int32_t g_goertzel_omega_per_sample = 1238618695; // 47/256 -> 27.01920 MHz
+//const int32_t g_goertzel_coefficient = 870249096;
+//const int32_t g_goertzel_coefficient_s = 1963250500;
+
+/*
+#define PWM_PERIOD (31-1)
+const int32_t g_goertzel_omega_per_sample = 1228662895; // 0.182118 of whole per step / 27.025000MHz
+const int32_t g_goertzel_coefficient = 888414806;
+const int32_t g_goertzel_coefficient_s = 1955097223;
+*/
+
+#define PWM_PERIOD (28-1)
+const int32_t g_goertzel_omega_per_sample = 1154616630; // 0.171143 of whole per step / 0.880162MHz
+const int32_t g_goertzel_coefficient = 1021021706;
+const int32_t g_goertzel_coefficient_s = 1889232832;
+
+
+
+
 
 #define LOG_GOERTZEL_LIST 256
 int32_t gertzellogs[LOG_GOERTZEL_LIST*2];
