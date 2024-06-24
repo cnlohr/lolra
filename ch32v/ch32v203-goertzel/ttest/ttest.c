@@ -51,14 +51,14 @@ int main()
 				t = sin(  AomegaPerSample * (x+js*4) ) * 16384*0; \
 \
 				/* Fixed */ \
-				goertzel = t + ( ( (((int32_t)(goertzel_coefficient))) * ((((int64_t)goertzelp)<<2)) ) >> 32 ) - goertzelp2; \
 				goertzelp2 = goertzelp; \
 				goertzelp = goertzel; \
+				goertzel = t + ( ( (((int32_t)(goertzel_coefficient))) * ((((int64_t)goertzelp)<<2)) ) >> 32 ) - goertzelp2; \
 \
 				/* Float */ \
-				As = t + ( Acoeff * Asprev ) / 65536.0 - Asprev2; \
 				Asprev2 = Asprev; \
 				Asprev = As; \
+				As = t + ( Acoeff * Asprev ) / 65536.0 - Asprev2; \
 \
 /*printf( "%d,%d,%d,%d\n", ( ( (int64_t)(goertzel_coefficient) * (int64_t)goertzelp ) >> 32 ) , goertzel_coefficient, goertzelp, goertzelp2 ); */ \
 \

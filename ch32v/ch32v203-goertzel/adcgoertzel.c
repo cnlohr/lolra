@@ -84,6 +84,9 @@ const int32_t g_goertzel_coefficient = 870249096;
 const int32_t g_goertzel_coefficient_s = 1963250500;
 
 
+#define LOG_GOERTZEL_LIST 256
+int32_t gertzellogs[LOG_GOERTZEL_LIST*2];
+int     gertzellogs_head;
 
 void SetupADC()
 {
@@ -207,7 +210,7 @@ volatile uint16_t * adc_tail = adc_buffer;
 
 uint32_t g_goertzel_samples;
 uint32_t g_goertzel_outs;
-int32_t g_goertzelp, g_goertzelp2;
+int32_t g_goertzel, g_goertzelp, g_goertzelp2;
 int32_t g_goertzelp_store, g_goertzelp2_store;
 
 void DMA1_Channel1_IRQHandler( void ) __attribute__((interrupt));
@@ -222,6 +225,8 @@ void DMA1_Channel1_IRQHandler( void )
 	int32_t goertzel_coefficient = g_goertzel_coefficient;
 	int32_t goertzelp2 = g_goertzelp2;
 	int32_t goertzelp = g_goertzelp;
+	int32_t goertzel = g_goertzel;
+
 	uint32_t goertzel_samples = g_goertzel_samples;
 	// Backup flags.
 	volatile int intfr = DMA1->INTFR;
@@ -237,51 +242,75 @@ void DMA1_Channel1_IRQHandler( void )
 
 		adc_buffer_end = adc_buffer + ( ( tpl / 4) * 4 );
 
+		#define INFADC 2
+		// Add a tiny bias to the ADC to help keep goertz in range.
+		const int adc_offset = (-2048) << INFADC;
+
+
 		while( adc_tail != adc_buffer_end )
 		{
 
-			int32_t t; // 1/2 of 4096, to try to keep our numbers reasonable.
+			uint32_t t; // 1/2 of 4096, to try to keep our numbers reasonable.
 
 			// Here is where the magic happens.
-			int32_t goertzel;
 
-			#define INFADC 2
-			const int ofs = (-2048) << INFADC;
+#if 1
+			#define XSTR(x) #x
+			#define GOERTZELLOOP(idx)  \
+			asm volatile("\n\
+				lhu     %[adcin]," XSTR(idx) "(%[adc_tail])	\n\
+				slli    %[adcin],%[adcin],%[iadc]			/*INFADC = 2*/ \n\
+				add		%[adcin],%[adcin],%[adcoffset]		/*adcin += adcoffset*/ \n\
+				addi    %[goertzelp2],%[goertzelp],0		/*goertzelp2 = goertzelp*/ \n\
+				addi    %[goertzelp], %[goertzel],0			/*goertzelp = goertzel*/ \n\
+				slli    %[goertzel], %[goertzelp], 2		/*prescaling up goertzelp*/\n\
+				mulh    %[goertzel], %[goertzel_coefficient], %[goertzel]\n\
+				sub     %[adcin],%[adcin],%[goertzelp2]		/*adcin -= goertzelp2*/ \n\
+				add     %[goertzel], %[goertzel], %[adcin]	/* mulh = signed * signed + adc */ \n"\
+			: [goertzel]"+r"(goertzel), [goertzelp]"+r"(goertzelp), [goertzelp2]"+r"(goertzelp2), [adcin]"+r"(t) : \
+				[adc_tail]"r"(adc_tail), [adcoffset]"r"(adc_offset), [goertzel_coefficient]"r"(goertzel_coefficient), [iadc]"i"(INFADC) );
 
-			t = ((adc_tail[0])<<INFADC)+ofs;
-				goertzel = t + ( ( (((int32_t)(goertzel_coefficient))) * ((((int64_t)goertzelp)<<2)) ) >> 32 ) - goertzelp2;
+			GOERTZELLOOP(0);
+			GOERTZELLOOP(2);
+			GOERTZELLOOP(4);
+			GOERTZELLOOP(6);
+#else
+			t = ((adc_tail[0])<<INFADC)+adc_offset;
 				goertzelp2 = goertzelp;
 				goertzelp = goertzel;
-
-			t = ((adc_tail[1])<<INFADC)+ofs;
 				goertzel = t + ( ( (((int32_t)(goertzel_coefficient))) * ((((int64_t)goertzelp)<<2)) ) >> 32 ) - goertzelp2;
+
+			t = ((adc_tail[1])<<INFADC)+adc_offset;
 				goertzelp2 = goertzelp;
 				goertzelp = goertzel;
-
-			t = ((adc_tail[2])<<INFADC)+ofs;
 				goertzel = t + ( ( (((int32_t)(goertzel_coefficient))) * ((((int64_t)goertzelp)<<2)) ) >> 32 ) - goertzelp2;
+
+			t = ((adc_tail[2])<<INFADC)+adc_offset;
 				goertzelp2 = goertzelp;
 				goertzelp = goertzel;
-
-			t = ((adc_tail[3])<<INFADC)+ofs;
 				goertzel = t + ( ( (((int32_t)(goertzel_coefficient))) * ((((int64_t)goertzelp)<<2)) ) >> 32 ) - goertzelp2;
+
+			t = ((adc_tail[3])<<INFADC)+adc_offset;
 				goertzelp2 = goertzelp;
 				goertzelp = goertzel;
-
+				goertzel = t + ( ( (((int32_t)(goertzel_coefficient))) * ((((int64_t)goertzelp)<<2)) ) >> 32 ) - goertzelp2;
+#endif
 
 			adc_tail+=4;
 			goertzel_samples+=4;
 			if( adc_tail == adc_buffer_top ) adc_tail = adc_buffer;
 			if( goertzel_samples == GOERTZEL_BUFFER )
 			{
-				g_goertzelp_store = goertzelp - (g_goertzel_omega_per_sample>>(29-16));
-				g_goertzelp2_store = goertzelp2;
+				g_goertzelp_store = goertzel - (g_goertzel_omega_per_sample>>(29-16));
+				g_goertzelp2_store = goertzelp;
 
-
-				goertzelp = g_goertzel_omega_per_sample>>(29-16);
-				goertzelp2 = 0;
+				gertzellogs[gertzellogs_head++] = g_goertzelp_store;
+				gertzellogs[gertzellogs_head++] = g_goertzelp2_store;
+				gertzellogs_head = gertzellogs_head & ((LOG_GOERTZEL_LIST*2)-1);
 
 				g_goertzel_outs++;
+				goertzel = g_goertzel_omega_per_sample>>(29-16);
+				goertzelp = 0;
 				goertzel_samples = 0;
 			}
 		}
@@ -292,6 +321,7 @@ void DMA1_Channel1_IRQHandler( void )
 
 	g_goertzelp2 = goertzelp2;
 	g_goertzelp = goertzelp;
+	g_goertzel = goertzel;
 	g_goertzel_samples = goertzel_samples;
 
 	//GPIOD->BSHR = 1<<16; // Turn off GPIOD0 for profiling
@@ -301,9 +331,12 @@ void DMA1_Channel1_IRQHandler( void )
 
 void InnerLoop()
 {
+	int intensity_max = 1;
+
 	while(1){
 
 		int k;
+#if 0
 		int adcz = adc_buffer[0];
 		for( k = 0; k < 128; k++ )
 		{
@@ -312,6 +345,48 @@ void InnerLoop()
 			if( y > 127 ) y = 127;
 			ssd1306_drawPixel( k, y, 1 );
 		}
+#endif
+
+		int pxa = 0;
+
+		// Only display half of the list so the other half could
+		// be updated by the ISR.
+		int glread = gertzellogs_head+LOG_GOERTZEL_LIST*2/2;
+
+		
+
+		for( pxa = 0; pxa < LOG_GOERTZEL_LIST/2; pxa++ )
+		{
+			glread = (glread)&(LOG_GOERTZEL_LIST*2-1);
+			int32_t zp = gertzellogs[glread++];
+			int32_t zp2 = gertzellogs[glread++];
+			int32_t rr = (((int64_t)(g_goertzel_coefficient  ) * (int64_t)zp<<1)>>32) - (zp2);
+			int32_t ri = (((int64_t)(g_goertzel_coefficient_s) * (int64_t)zp<<1)>>32);
+
+			rr>>=4;
+			ri>>=4;
+
+			int s = rr * rr + ri * ri;
+			int intensity = 1<<( ( 32 - __builtin_clz(s) )/2);
+			intensity = (intensity + s/intensity)/2;
+			intensity = (intensity + s/intensity)/2;
+			if( intensity > intensity_max ) intensity_max = intensity;
+
+			rr = rr * 64 / intensity_max;
+			ri = ri * 64 / intensity_max;
+
+			rr += 64;
+			ri += 64;
+
+			if( rr < 0 ) rr = 0;
+			if( ri < 0 ) ri = 0;
+			if( rr > 127 ) rr = 127;
+			if( ri > 127 ) ri = 127;
+			
+			ssd1306_drawPixel( rr, ri, 1 );
+		}
+
+		intensity_max = intensity_max - (intensity_max>>4);
 
 		ssd1306_refresh();
 		ssd1306_setbuf(0);
@@ -326,7 +401,8 @@ void InnerLoop()
 		x = (x + s/x)/2;
 		x = (x + s/x)/2;
 
-		printf( "%6d %8d %8d - %8d %8d - %8d\n", g_goertzel_outs,g_goertzelp2_store, g_goertzelp_store, rr, ri, x );
+//		printf( "%6d %8d %8d - %8d %8d - %8d\n", g_goertzel_outs,g_goertzelp2_store, g_goertzelp_store, rr, ri, x );
+
 //		Delay_Ms(940);
 	}
 
@@ -368,7 +444,7 @@ int main()
 	Delay_Ms(10);
 
 
-	printf( "CTLR: %08x / CFGR0: %08x\n", (RCC->CTLR), (RCC->CFGR0) );
+	//printf( "CTLR: %08x / CFGR0: %08x\n", (RCC->CTLR), (RCC->CFGR0) );
 	RCC->AHBPCENR |= 3; //DMA2EN | DMA1EN
 	RCC->APB2PCENR |= RCC_APB2Periph_TIM1 | RCC_APB2Periph_ADC1 | RCC_APB2Periph_ADC2 | 0x07; // Enable all GPIO
 	RCC->APB1PCENR |= RCC_APB1Periph_TIM2;
