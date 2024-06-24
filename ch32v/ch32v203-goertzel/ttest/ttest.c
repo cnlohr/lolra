@@ -13,6 +13,7 @@ int32_t g_goertzelp_store, g_goertzelp2_store;
 int main()
 {
 	//XXX XXX NOTE If you are computing the coefficients, you can plug the value in here.
+	// You can get this number from calculator.html. I've had better luck with "inverse goertzel" numbers.
 	g_goertzel_omega_per_sample = (47.0/256) * 3.1415926535*2.0*(1<<29);
 	g_goertzel_coefficient   = 2 * cos( g_goertzel_omega_per_sample / (double)(1<<29) ) * (1<<30);
 	g_goertzel_coefficient_s = 2 * sin( g_goertzel_omega_per_sample / (double)(1<<29) ) * (1<<30);

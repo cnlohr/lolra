@@ -68,7 +68,7 @@ SOFTWARE.
 #include "ssd1306.h"
 
 
-#define PWM_PERIOD (31-1) //For 27.0MHz, use 36MHz if quadrature -- It appears to be good for *244 in the table?  WHY 26MHz???!?!!?
+#define PWM_PERIOD (31-1)
 
 #define ADC_BUFFSIZE 512
 
@@ -82,7 +82,6 @@ volatile uint16_t adc_buffer[ADC_BUFFSIZE];
 const int32_t g_goertzel_omega_per_sample = 1238618695; // 47/256 -> 27.01920 MHz
 const int32_t g_goertzel_coefficient = 870249096;
 const int32_t g_goertzel_coefficient_s = 1963250500;
-
 
 #define LOG_GOERTZEL_LIST 256
 int32_t gertzellogs[LOG_GOERTZEL_LIST*2];

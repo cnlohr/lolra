@@ -5,7 +5,7 @@ TARGET_MCU:=CH32V203G6U6
 TARGET_MCU_PACKAGE:=CH32V203G6U6
 CH32V003FUN:=../ch32v003fun/ch32v003fun
 
-EXTRA_CFLAGS:=-Wno-unused-function -I../../lib -I../ch32v203-fft/lib
+EXTRA_CFLAGS:=-Wno-unused-function -I../../lib -I../lib
 
 include ../ch32v003fun/ch32v003fun/ch32v003fun.mk
 

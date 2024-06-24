@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<HTML>
+<HEAD>
+<STYLE>
+body {
+  background-color: Canvas;
+  color: CanvasText;
+  color-scheme: light dark;
+}
+
+</STYLE>
+<SCRIPT>
+
+
+function DrawSpan( colspan, freq, target, docolor, extrastr = "" )
+{
+	var fdist = Math.abs( freq - target );
+	fdist = Math.pow( fdist, 0.5 ) * 500;
+//	if( fdist > 255 ) fdist = 255;
+	let ret = "<TD COLSPAN=" + colspan + ' ';
+	if( docolor ) ret += 'STYLE="color:black;background-color:rgb(' + fdist + ',' + (511-fdist) + ',0)";';
+	ret += '>' + extrastr + freq.toFixed(6) + "</TD>";
+	return ret;
+}
+
+function Goertz( n, mhz, fr )
+{
+	let omega = fr * 2 * 3.1415926535*2.0;
+	var textarea = document.getElementById("goertzeloutput");
+	textarea.value = 
+		"#define PWM_PERIOD ("+n+"-1)\n" +
+		"const int32_t g_goertzel_omega_per_sample = " + ( omega*2*(1<<29)).toFixed(0) + "; // " + mhz.toFixed(6) + "MHz\n" +
+		"const int32_t g_goertzel_coefficient = " + (2 * Math.cos( omega ) * (1<<30)).toFixed(0) + ";\n" +
+		"const int32_t g_goertzel_coefficient_s = "+ (2 * Math.sin( omega ) * (1<<30)).toFixed(0) + ";\n";
+
+	  // Highlight its content
+	  textarea.select();
+
+	  // Copy the highlighted text
+	  document.execCommand("copy");
+}
+
+function computeTable()
+{
+	const max_harmonics = 28|0;
+	const min_harmonics = 1|0;
+	let xtal = Number(document.getElementById("crystalmhz").value );
+	let target = Number(document.getElementById("targetmhz").value );
+	let quadrature = document.getElementById("QUADRATURE").checked;
+
+	let contents = "";
+
+	if( quadrature )
+	{
+		contents += "<TABLE>" +
+			"<TR><TD>Quadrature:</TD></TR>" +
+			"<TR><TD>I = + + - -</TD></TR>" +
+			"<TR><TD>Q = + - - +</TD></TR>" +
+			"<TR><TD>Differntial:</TD></TR>" +
+			"<TR><TD>V = + - + -</TD></TR>" +
+			"<TR><TD>You choose the mode you operate in, either Quadrature or differential</TD></TR>" +
+			"</TABLE>" +
+			"<p> Table shows: </P>" +
+			"<TABLE BORDER=1>" +
+			"<TR><TD>Sample Frequency Harmonic</TD></TR>" +
+			"<TR><TD>Lower Quadrature Frequency</TD></TR>" +
+			"<TR><TD>Upper Quadrature Frequency</TD></TR>" +
+			"<TR><TD>Differential Frequency</TD></TR>" +
+			"</TABLE>";
+	}
+	else
+	{
+		contents +=
+			"<TABLE BORDER=1>" +
+			"<TR><TD>Goertzel</TD></TR>" +
+			"<TR><TD>Goertzel (Inverse)</TD></TR>" +
+			"</TABLE><TEXTAREA ROWS=5 COLS=80 ID=goertzeloutput></TEXTAREA>";
+	}
+
+	contents += "<TABLE BORDER=1>";
+	contents += '<TR><TH>d\\h</div></TH>';
+	for( let h = 0|min_harmonics; h <= max_harmonics; h++ )
+	{
+		contents += "<TH COLSPAN=2>" + h + "</TH>";
+	}
+
+	for( let n = 0|28; n <= 66; n++ )
+	{
+		let freq = ( xtal / n );
+		let goertzelpoint = 0;
+		let goertzelpointinv = 0;
+		for( let h = 0|min_harmonics; h <= max_harmonics; h++ )
+		{
+			let base = freq * h;
+			let next = freq * (h+1);
+			if( target <= next && target >= base )
+			{
+				goertzelpoint = ( target - base ) / ( next - base );
+
+				goertzelpointinv = - (1.0 - ( target - base ) / ( next - base ));
+			}
+		}
+		contents += "</TR>";
+
+		for( let mode = 0; mode < 4; mode++ )
+		{
+			contents += "<TR>";
+			if( mode == 0 )
+				contents += "<TD ROWSPAN=" + 4 + ">" + n + "</TD>";
+			for( let h = 0|min_harmonics; h <= max_harmonics; h++ )
+			{
+				if( quadrature )
+				{
+					if( mode == 0 )
+						contents += DrawSpan( 2, freq * h, target, false );
+					else if( mode == 1 )
+						contents += DrawSpan( 2, freq * (h-.25), target, true );
+					else if( mode == 2 )
+						contents += DrawSpan( 2, freq * (h+.25), target, true );
+					else if( mode == 3 )
+						contents += DrawSpan( 2, freq * (h+0.5), target, true );
+				}
+				else
+				{
+					if( mode == 0 )
+					{
+						contents += "<TD COLSPAN=2><SPAN ONCLICK='Goertz(" + n + ", " + freq * (h+goertzelpoint) + ", " + (-goertzelpointinv) + ")'>↑" + (-goertzelpointinv).toFixed(6) + "</SPAN></TD>";
+					}
+					else if( mode == 1 )
+					{
+						contents += DrawSpan( 2, freq * (h+goertzelpoint), target, true );
+					}
+					else if( mode == 2 )
+					{
+						contents += "<TD COLSPAN=2><SPAN ONCLICK='Goertz(" + n + ", " + freq * (h+goertzelpointinv) + ", " + goertzelpoint + ")'>↓" + goertzelpoint.toFixed(6) + "</SPAN></TD>";
+					}
+					else if( mode == 3 )
+					{
+						contents += DrawSpan( 2, freq * (h+goertzelpointinv), target, true );
+					}
+				}
+			}
+			contents += "</TD>";
+		}
+	}
+	contents += "</TABLE>";
+	document.getElementById( "TABLE" ).innerHTML = contents;
+}
+
+
+</SCRIPT>
+</HEAD>
+<BODY>
+
+<p>Tool for computing tuning to specific frequencies by use of direct ADC reading at specific timer-controlled rate to "tune" to specific frequencies either by quadrature or differential.</p>
+<TABLE>
+<TR><TD>Crystal MHz</TD><TD><INPUT ID=crystalmhz VALUE=144></TD></TR>
+<TR><TD>Target MHz</TD><TD><INPUT ID=targetmhz VALUE=27.019360></TD></TR>
+<TR><TD>Table Type</TD><TD><INPUT TYPE=RADIO ID=QUADRATURE NAME=computetype checked>Quadrature</INPUT><INPUT TYPE=RADIO ID=GOERTZELS NAME=computetype>Goertzels</INPUT></TD></TR>
+<TR><TD COLSPAN=2><INPUT TYPE=SUBMIT VALUE="Compute" ONCLICK="computeTable()"></TD></TR>
+</TABLE>
+
+
+<DIV ID=TABLE></DIV>
+
+</BODY>
+</HTML>
