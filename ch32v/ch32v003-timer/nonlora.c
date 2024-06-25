@@ -48,7 +48,7 @@ SOFTWARE.
 // NOT LORA!!!
 
 // Transmit a sweep on 97.7MHz
-//#define FM_TRANSMITTER_SWEEP
+#define FM_TRANSMITTER_SWEEP
 
 // Nothing = Transmit a 315MHz signal.
 
@@ -376,7 +376,9 @@ void LoopFunction2()
 		{
 #ifdef FM_TRANSMITTER_SWEEP
 			// 97.7MHz FM Station
-			uint32_t cp = ((SysTick->CNT>>3)&0x3fff)+0x12900;
+			int notein = (SysTick->CNT>>4)&0x3fff;
+			if( notein > 0x1fff ) notein = 0x4000-notein;
+			uint32_t cp = (notein)+0x12900;
 #else
 			// 315MHz
 			uint32_t cp = 0x1bfc3;
