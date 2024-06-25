@@ -23,12 +23,13 @@ function DrawSpan( colspan, freq, target, docolor, extrastr = "" )
 	return ret;
 }
 
-function Goertz( n, mhz, fr )
+function Goertz( n, mhz, fr, brf )
 {
 	let omega = fr * 3.1415926535*2.0;
 	var textarea = document.getElementById("goertzeloutput");
 	textarea.value = 
 		"#define PWM_PERIOD ("+n+"-1)\n" +
+		"#define GOERTZEL_BUFFER ("+brf+")\n" +
 		"const int32_t g_goertzel_omega_per_sample = " + ( omega*2*(1<<29)).toFixed(0) + "; // " + ( omega / (3.1415926535*2.0)).toFixed(6) + " of whole per step / " + mhz.toFixed(6) + "MHz\n" +
 		"const int32_t g_goertzel_coefficient = " + (2 * Math.cos( omega ) * (1<<30)).toFixed(0) + ";\n" +
 		"const int32_t g_goertzel_coefficient_s = "+ (2 * Math.sin( omega ) * (1<<30)).toFixed(0) + ";\n";
@@ -46,6 +47,7 @@ function computeTable()
 	let target = Number(document.getElementById("targetmhz").value );
 	let quadrature = document.getElementById("QUADRATURE").checked;
 	let quanta = Math.round(Number(document.getElementById("quanta").value));
+	let quantasearch = Math.round(Number(document.getElementById("quantasearch").value));
  
 
 	const max_harmonics = 28|0;
@@ -77,7 +79,7 @@ function computeTable()
 			"<TABLE BORDER=1>" +
 			"<TR><TD>Goertzel</TD></TR>" +
 			"<TR><TD>Goertzel (Inverse)</TD></TR>" +
-			"</TABLE><TEXTAREA ROWS=5 COLS=120 ID=goertzeloutput></TEXTAREA>";
+			"</TABLE><TEXTAREA ROWS=6 COLS=120 ID=goertzeloutput></TEXTAREA>";
 	}
 
 	contents += "<TABLE BORDER=1>";
@@ -94,20 +96,38 @@ function computeTable()
 		let goertzelpointinv = 0;
 		let tgoertzelp = 0;
 		let tgoertzelpi = 0;
+		let quantaA = 0;
+		let quantaINV = 0;
 		for( let h = 0|min_harmonics; h <= max_harmonics; h++ )
 		{
 			let base = freq * h;
 			let next = freq * (h+1);
-			if( target <= next && target >= base )
-			{
-				var t;
-				goertzelpoint = ( target - base ) / ( next - base );
-				goertzelpoint = Math.round(quanta * goertzelpoint)/quanta;
 
-				tgoertzelp = h;
-				goertzelpointinv = (1.0 - ( target - base ) / ( next - base ));
-				goertzelpointinv = Math.round(quanta * goertzelpointinv)/quanta;
-				tgoertzelpi = h+1;
+			// Round quanta down to next order-of-4-even
+			for( let tquanta = (quanta&0xffffc) - (quantasearch&0xffffc); tquanta < (quanta&0xffffc) + (quantasearch&0xffffc); tquanta+=4 )
+			{
+				if( target <= next && target >= base )
+				{
+					var t;
+					let tgoertzelpoint = ( target - base ) / ( next - base );
+					tgoertzelpoint = Math.round(tquanta * tgoertzelpoint)/tquanta;
+					if( Math.abs( freq*(h+tgoertzelpoint) - target ) < Math.abs( freq*(h+goertzelpoint) - target ) )
+					{
+						goertzelpoint = tgoertzelpoint;
+						tgoertzelp = h;
+						quantaA = tquanta;
+					}
+
+					let tgoertzelpointinv = (1.0 - ( target - base ) / ( next - base ));
+					tgoertzelpointinv = Math.round(tquanta * tgoertzelpointinv)/tquanta;
+
+					if( Math.abs( freq*(h-tgoertzelpointinv+1) - target ) < Math.abs( freq*(h-goertzelpointinv+1) - target ) )
+					{
+						goertzelpointinv = tgoertzelpointinv;
+						tgoertzelpi = h;
+						quantaINV = tquanta;
+					}
+				}
 			}
 		}
 		contents += "</TR>";
@@ -135,7 +155,7 @@ function computeTable()
 					if( mode == 0 )
 					{
 						contents += "<TD COLSPAN=2>"
-						if( tgoertzelp == h ) contents += "<SPAN ONCLICK='Goertz(" + n + ", " + freq * (h+goertzelpoint) + ", " + (goertzelpoint) + ")'>↑" + (goertzelpoint).toFixed(6) + "</SPAN>";
+						if( tgoertzelp == h ) contents += "<SPAN ONCLICK='Goertz(" + n + ", " + freq * (h+goertzelpoint) + ", " + (goertzelpoint) + ", " + quantaA + ")'>↑" + (goertzelpoint).toFixed(6) + "</SPAN>";
 						contents += "</TD>";
 					}
 					else if( mode == 1 )
@@ -145,7 +165,7 @@ function computeTable()
 					else if( mode == 2 )
 					{
 						contents += "<TD COLSPAN=2>"
-						if( tgoertzelp == h-1 ) contents += "<SPAN ONCLICK='Goertz(" + n + ", " + freq * (h-goertzelpointinv) + ", " + goertzelpointinv + ")'>↓" + goertzelpointinv.toFixed(6) + "</SPAN>";
+						if( tgoertzelpi == h-1  ) contents += "<SPAN ONCLICK='Goertz(" + n + ", " + freq * (h-goertzelpointinv) + ", " + goertzelpointinv + ", " + quantaINV + ")'>↓" + goertzelpointinv.toFixed(6) + "</SPAN>";
 						contents += "</TD>";
 					}
 					else if( mode == 3 )
@@ -171,6 +191,7 @@ function computeTable()
 <TR><TD>Crystal MHz</TD><TD><INPUT ID=crystalmhz VALUE=144></TD></TR>
 <TR><TD>Target MHz</TD><TD><INPUT ID=targetmhz VALUE=27.019360></TD></TR>
 <TR><TD>Quanta</TD><TD><INPUT ID=quanta VALUE=1024> (Goertzel's Algorithm Only)</TD></TR>
+<TR><TD>Quanta Search Range</TD><TD><INPUT ID=quantasearch VALUE=64> (Goertzel's Algorithm Only)</TD></TR>
 <TR><TD>Table Type</TD><TD><INPUT TYPE=RADIO ID=QUADRATURE NAME=computetype checked>Quadrature</INPUT><INPUT TYPE=RADIO ID=GOERTZELS NAME=computetype>Goertzels</INPUT></TD></TR>
 <TR><TD COLSPAN=2><INPUT TYPE=SUBMIT VALUE="Compute" ONCLICK="computeTable()"></TD></TR>
 </TABLE>
