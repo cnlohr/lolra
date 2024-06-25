@@ -112,13 +112,21 @@ const int32_t g_goertzel_coefficient_s = 1984016189;
 
 #endif
 
+#if 0
+#define PWM_PERIOD (30-1)
+#define GOERTZEL_BUFFER (320)
+const int32_t g_goertzel_omega_per_sample = 990894956; // 0.146875 of whole per step / 101.505000MHz
+const int32_t g_goertzel_coefficient = 1296126516;
+const int32_t g_goertzel_coefficient_s = 1712233066;
+
+#endif
+
 #if 1
 #define PWM_PERIOD (30-1)
-#define GOERTZEL_BUFFER (396)
-const int32_t g_goertzel_omega_per_sample = 5485805733; // 0.813131 of whole per step / 90.303030MHz
-const int32_t g_goertzel_coefficient = 829669840;
-const int32_t g_goertzel_coefficient_s = -1980740764;
-
+#define GOERTZEL_BUFFER (384)
+const int32_t g_goertzel_omega_per_sample = 4251712402; // 0.630208 of whole per step / 27.025000MHz
+const int32_t g_goertzel_coefficient = -1468003291;
+const int32_t g_goertzel_coefficient_s = -1567371161;
 #endif
 
 int intensity_max = 1;
