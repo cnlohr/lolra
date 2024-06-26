@@ -64,7 +64,7 @@ SOFTWARE.
 
 #define SH1107_128x128
 
-#define PWM_OUTPUT
+//#define PWM_OUTPUT
 #define ENABLE_OLED
 #include "ssd1306_i2c.h"
 #include "ssd1306.h"
@@ -89,7 +89,7 @@ const int32_t g_goertzel_coefficient_s = 1580594514;
 
 #if 0
 #define PWM_PERIOD (30-1)
-#define GOERTZEL_BUFFER (420)
+#define GOERTZEL_BUFFER (180)
 const int32_t g_goertzel_omega_per_sample = 5509657063; // 0.816667 of whole per step / 0.880000MHz
 const int32_t g_goertzel_coefficient = 873460290;
 const int32_t g_goertzel_coefficient_s = -1961823932;
@@ -109,7 +109,6 @@ const int32_t g_goertzel_coefficient_s = 2147233926;
 const int32_t g_goertzel_omega_per_sample = 1264972285; // 0.187500 of whole per step / 90.300000MHz
 const int32_t g_goertzel_coefficient = 821806413;
 const int32_t g_goertzel_coefficient_s = 1984016189;
-
 #endif
 
 #if 0
@@ -118,16 +117,24 @@ const int32_t g_goertzel_coefficient_s = 1984016189;
 const int32_t g_goertzel_omega_per_sample = 990894956; // 0.146875 of whole per step / 101.505000MHz
 const int32_t g_goertzel_coefficient = 1296126516;
 const int32_t g_goertzel_coefficient_s = 1712233066;
-
 #endif
 
-#if 1
+#if 0
 #define PWM_PERIOD (30-1)
 #define GOERTZEL_BUFFER (384)
 const int32_t g_goertzel_omega_per_sample = 4251712402; // 0.630208 of whole per step / 27.025000MHz
 const int32_t g_goertzel_coefficient = -1468003291;
 const int32_t g_goertzel_coefficient_s = -1567371161;
 #endif
+
+#if 1
+#define PWM_PERIOD (30-1)
+#define GOERTZEL_BUFFER (336)
+const int32_t g_goertzel_omega_per_sample = 1827182189; // 0.270833 of whole per step / 89.900000MHz
+const int32_t g_goertzel_coefficient = -280302863;
+const int32_t g_goertzel_coefficient_s = 2129111628;
+#endif
+
 
 int intensity_max = 1;
 
@@ -226,7 +233,7 @@ static void SetupTimer1()
 #ifdef PWM_OUTPUT
 	// PA9 = T1CH2.
 	GPIOA->CFGHR &= ~(0xf<<(4*1));
-	GPIOA->CFGHR |= (GPIO_Speed_10MHz | GPIO_CNF_OUT_PP_AF)<<(4*1);
+	GPIOA->CFGHR |= (GPIO_Speed_2MHz | GPIO_CNF_OUT_PP_AF)<<(4*1);
 
 	TIM1->CCER = TIM_CC2E | TIM_CC2P;
 	TIM1->CHCTLR1 |= TIM_OC2M_2 | TIM_OC2M_1 | TIM_OC2FE;
@@ -358,25 +365,28 @@ void DMA1_Channel1_IRQHandler( void )
 				gertzellogs[gertzellogs_head++] = g_goertzelp2_store;
 				gertzellogs_head = gertzellogs_head & ((LOG_GOERTZEL_LIST*2)-1);
 
-
-
-				#ifdef PWM_OUTPUT
 				int32_t zp = g_goertzelp_store;
 				int32_t zp2 = g_goertzelp2_store;
 				int32_t rr = (((int64_t)(g_goertzel_coefficient  ) * (int64_t)zp<<1)>>32) - (zp2);
 				int32_t ri = (((int64_t)(g_goertzel_coefficient_s) * (int64_t)zp<<1)>>32);
 
-				//rr>>=1;
-				//ri>>=1;
-				rr = rr * PWM_PERIOD / (intensity_max>>7);
-				ri = ri * PWM_PERIOD / (intensity_max>>7);
+				rr>>=2;
+				ri>>=2;
+
 				int s = rr * rr + ri * ri;
 				int intensity = 1<<( ( 32 - __builtin_clz(s) )/2);
 				intensity = (intensity + s/intensity)/2;
 				intensity = (intensity + s/intensity)/2;
-				
-				if( intensity >= PWM_PERIOD ) intensity = PWM_PERIOD-1;
-				if( intensity < 0 ) intensity = 0;
+
+				intensity_max = intensity_max - (intensity_max>>10) + (intensity>>2);
+
+
+				#ifdef PWM_OUTPUT
+
+				intensity = intensity * PWM_PERIOD / (intensity_max>>7);
+
+				if( intensity >= PWM_PERIOD-1 ) intensity = PWM_PERIOD-2;
+				if( intensity < 1 ) intensity = 1;
 
 				TIM1->CH2CVR = intensity;  // Actual duty cycle (Off to begin with)
 				#endif
@@ -425,6 +435,7 @@ void InnerLoop()
 		int glread = gertzellogs_head+LOG_GOERTZEL_LIST*2/2;
 
 		
+		int intensity = 0;
 
 		for( pxa = 0; pxa < LOG_GOERTZEL_LIST/2; pxa++ )
 		{
@@ -437,15 +448,13 @@ void InnerLoop()
 			//rr>>=1;
 			//ri>>=1;
 
-			int s = rr * rr + ri * ri;
-			int intensity = 1<<( ( 32 - __builtin_clz(s) )/2);
-			intensity = (intensity + s/intensity)/2;
-			intensity = (intensity + s/intensity)/2;
-//			if( intensity > intensity_max ) intensity_max = intensity;
-			intensity_max = intensity_max - (intensity_max>>8) + intensity;
+			//int s = rr * rr + ri * ri;
+			//intensity = 1<<( ( 32 - __builtin_clz(s) )/2);
+			//intensity = (intensity + s/intensity)/2;
+			//intensity = (intensity + s/intensity)/2;
 
-			rr = rr * 64 / (intensity_max>>7);
-			ri = ri * 64 / (intensity_max>>7);
+			rr = rr * 100 / (intensity_max>>4);
+			ri = ri * 100 / (intensity_max>>4);
 
 			rr += 64;
 			ri += 64;
@@ -464,16 +473,8 @@ void InnerLoop()
 		ssd1306_refresh();
 		ssd1306_setbuf(0);
 
-		int32_t rr = (((int64_t)(g_goertzel_coefficient  ) * (int64_t)g_goertzelp_store<<1)>>32) - (g_goertzelp2_store); \
-		int32_t ri = (((int64_t)(g_goertzel_coefficient_s) * (int64_t)g_goertzelp_store<<1)>>32); \
-
-		int s = rr * rr + ri * ri;
-		int x = 1<<( ( 32 - __builtin_clz(s) )/2);
-		x = (x + s/x)/2;
-		x = (x + s/x)/2;
-
 		char cts[32];
-		snprintf( cts, 32, "%6d", x );
+		snprintf( cts, 32, "%d %d", intensity_max, intensity );
 
 		ssd1306_drawstr( 0, 0, cts, 1 );
 #else
@@ -493,9 +494,6 @@ int main()
 
 	SysTick->CTLR = (1<<2) | 1; // HCLK
 	Delay_Ms(100);
-
-
-	printf( "System On\n" );
 
 	RCC->CTLR |= RCC_HSEON;
 	while( ! ( RCC->CTLR & RCC_HSERDY ) );
@@ -530,11 +528,12 @@ int main()
 
 	SetupADC();
 
-	printf( "Setting up OLED.\n" );
+#ifdef ENABLE_OLED
 	ssd1306_i2c_setup();
 	uint8_t ret = ssd1306_i2c_init();
 	ssd1306_init();
 	ssd1306_setbuf(0);
+#endif
 
 #if 0
 	int i = 0;
@@ -564,12 +563,7 @@ int main()
 	EXTEN->EXTEN_CTR |= EXTEN_OPA_NSEL;
 #endif
 
-
-	printf( "ADC Setup\n" );
-
 	SetupTimer1();
-
-	printf( "Timer 1 setup\n" );
 
 	InnerLoop();
 }

@@ -184,11 +184,11 @@ void DMA1_Channel3_IRQHandler( void )
 			}
 
 			// I tried using the DMA to do the copy - but that didn't work for some reason.
-			//while( DMA1_Channel2->CFGR & 1 );
-//			DMA1_Channel2->CNTR = DMA_SIZE_WORDS/2;
-//			DMA1_Channel2->MADDR = (uint32_t)tsb;
-//			DMA1_Channel2->PADDR = (uint32_t)sb;
-//			DMA1_Channel2->CFGR |= DMA_CFGR1_EN;
+			//while( DMA1_Channel5->CFGR & 1 );
+//			DMA1_Channel5->CNTR = DMA_SIZE_WORDS/2;
+//			DMA1_Channel5->MADDR = (uint32_t)tsb;
+//			DMA1_Channel5->PADDR = (uint32_t)sb;
+//			DMA1_Channel5->CFGR |= DMA_CFGR1_EN;
 
 			int cpy = DMA_SIZE_WORDS/2;
 #ifdef TEST_TONE
@@ -238,13 +238,13 @@ complete:
 void LoopFunction()  __attribute__((section(".srodata")));
 void LoopFunction()
 {
-	uint8_t * start = (uint8_t*)DMA1_Channel2->MADDR;
-	uint8_t * end = (uint8_t*)((uint32_t)DMA1_Channel2->MADDR + SENDBUFF_WORDS);
+	uint8_t * start = (uint8_t*)DMA1_Channel5->MADDR;
+	uint8_t * end = (uint8_t*)((uint32_t)DMA1_Channel5->MADDR + SENDBUFF_WORDS);
 	uint8_t * here = start+ 8;
 	uint32_t targ = 2000;
 	uint32_t running = 0;
-	uint8_t * tail = end - DMA1_Channel2->CNTR;
-	uint32_t * cntr = DMA1_Channel2->CNTR;
+	uint8_t * tail = end - DMA1_Channel5->CNTR;
+	uint32_t * cntr = DMA1_Channel5->CNTR;
 	uint32_t temp = 0;
 	uint32_t temp2 = 0;
 
@@ -282,7 +282,7 @@ skipreset:\n\
 	{
 		int targ_f = 2000; //(frameno & 511)*9 + 1700;
 		int run_f = 0;
-		uint8_t * tail = end - DMA1_Channel2->CNTR;
+		uint8_t * tail = end - DMA1_Channel5->CNTR;
 
 		while( here != tail )
 		{
@@ -317,6 +317,14 @@ skipreset:\n\
 void LoopFunction2() __attribute__((aligned(256))) __attribute__((section(".srodata"))) __attribute__ ((noinline));
 
 __attribute__((section(".sdata"))) __attribute__((aligned(256))) const uint32_t tablef[] = {
+		0x06060606,
+		0x06060607,
+		0x06070607,
+		0x07070706,
+		0x07070707,
+		0x07070708,
+		0x07080708,
+		0x08080807,
 		0x08080808, 
 		0x08080809, 
 		0x08090809, 
@@ -358,13 +366,13 @@ __attribute__((section(".sdata"))) __attribute__((aligned(256))) const uint32_t 
 void LoopFunction2()
 {
 
-	uint32_t * start = (uint8_t*)DMA1_Channel2->MADDR;
-	uint32_t * end = (uint8_t*)((uint32_t)DMA1_Channel2->MADDR + SENDBUFF_WORDS);
+	uint32_t * start = (uint8_t*)DMA1_Channel5->MADDR;
+	uint32_t * end = (uint8_t*)((uint32_t)DMA1_Channel5->MADDR + SENDBUFF_WORDS);
 	uint32_t * here = start;
 
 	int run_f = 0;
 
-	volatile uint32_t * cntrptr = &DMA1_Channel2->CNTR;
+	volatile uint32_t * cntrptr = &DMA1_Channel5->CNTR;
 
 	while(1)
 	{
@@ -376,9 +384,9 @@ void LoopFunction2()
 		{
 #ifdef FM_TRANSMITTER_SWEEP
 			// 97.7MHz FM Station
-			int notein = (SysTick->CNT>>4)&0x3fff;
-			if( notein > 0x1fff ) notein = 0x4000-notein;
-			uint32_t cp = (notein)+0x12900;
+			int notein = (SysTick->CNT>>3)&0x1fff;
+			if( notein > 0xfff ) notein = 0x2000-notein;
+			uint32_t cp = (notein)+0x20000;
 #else
 			// 315MHz
 			uint32_t cp = 0x1bfc3;
@@ -456,7 +464,7 @@ int main()
 	TIM1->PSC = 0x0000;
 	
 	// Auto Reload - sets period
-	TIM1->ATRLR = 20;
+	TIM1->ATRLR = 17;
 	
 	// Reload immediately
 	TIM1->SWEVGR |= TIM_UG;
@@ -479,10 +487,10 @@ int main()
 #endif
 
 	// Compare 1 = for triggering
-	TIM1->CHCTLR1 = TIM_OC1M_2 | TIM_OC1M_1;
+	TIM1->CHCTLR1 = TIM_OC1M_2 | TIM_OC1M_1 | TIM_OC1FE;
 	
 	// Set the Capture Compare Register value to 50% initially
-	TIM1->CH3CVR = 5;  // ACTUALLY Ignored typically it seems.
+	TIM1->CH3CVR = 4;  // ACTUALLY Ignored typically it seems.
 	TIM1->CH1CVR = 0; // This triggers DMA.
 	
 	// Enable TIM1 outputs
@@ -491,14 +499,28 @@ int main()
 	// Enable TIM1
 	TIM1->CTLR1 |= TIM_CEN;
 
-	TIM1->DMAINTENR = TIM_TDE | TIM_COMDE | TIM_CC1DE | TIM_UDE;
+	TIM1->DMAINTENR = TIM_TDE | TIM_UDE; // Outputs DMA1_Channel5
 
+#if 0
+	// Another try - use TIM2 to trigger DMA?
+	RCC->APB1PCENR |= RCC_APB1Periph_TIM2;
+	RCC->APB1PRSTR |= RCC_APB1Periph_TIM2;
+	RCC->APB1PRSTR &= ~RCC_APB1Periph_TIM2;
 
-	//DMA1_Channel3 is for SPI1TX
-	DMA1_Channel2->PADDR = (uint32_t)&TIM1->ATRLR;
-	DMA1_Channel2->MADDR = (uint32_t)sendbuff;
-	DMA1_Channel2->CNTR  = 0;// sizeof( bufferset )/2; // Number of unique copies.  (Don't start, yet!)
-	DMA1_Channel2->CFGR  =
+	TIM2->PSC = 0x0000;
+	TIM2->ATRLR = 37;
+	TIM2->SWEVGR |= TIM_UG;
+	TIM2->BDTR |= TIM_MOE;
+	TIM2->CHCTLR1 = TIM_OC1M_2 | TIM_OC1M_1 | TIM_OC1FE;
+	TIM2->DMAINTENR |= TIM_UDE | TIM_TDE | TIM_TDE | TIM_CC1DE;
+	TIM2->CTLR1 |= TIM_CEN;
+	// TIM2_UP = DMA Channel 2.
+#endif
+
+	DMA1_Channel5->PADDR = (uint32_t)&TIM1->CH3CVR;
+	DMA1_Channel5->MADDR = (uint32_t)sendbuff;
+	DMA1_Channel5->CNTR  = 0;// sizeof( bufferset )/2; // Number of unique copies.  (Don't start, yet!)
+	DMA1_Channel5->CFGR  =
 		DMA_M2M_Disable |		 
 		DMA_Priority_VeryHigh |
 		DMA_PeripheralDataSize_HalfWord |
@@ -519,9 +541,10 @@ int main()
 
 
 	// Enter critical section.
-	DMA1_Channel2->MADDR = (uint32_t)sendbuff;
-	DMA1_Channel2->CNTR = SENDBUFF_WORDS; // Number of unique uint16_t entries.
-	DMA1_Channel2->CFGR |= DMA_CFGR1_EN;
+	DMA1_Channel5->MADDR = (uint32_t)sendbuff;
+	DMA1_Channel5->CNTR = SENDBUFF_WORDS; // Number of unique uint16_t entries.
+	DMA1_Channel5->CFGR |= DMA_CFGR1_EN;
+
 
 	LoopFunction2();
 }
