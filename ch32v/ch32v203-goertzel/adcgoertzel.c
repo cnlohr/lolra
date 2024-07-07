@@ -138,8 +138,8 @@ const int32_t g_goertzel_coefficient_s = 2129111628;
 int intensity_max = 1;
 
 #define LOG_GOERTZEL_LIST 512
-int32_t gertzellogs[LOG_GOERTZEL_LIST*2];
-int     gertzellogs_head;
+int16_t qibaselogs[LOG_GOERTZEL_LIST*2];
+int     qibaselogs_head;
 
 void SetupADC()
 {
@@ -358,20 +358,32 @@ void DMA1_Channel1_IRQHandler( void )
 				g_goertzelp_store = goertzel - (g_goertzel_omega_per_sample>>(29-16));
 				g_goertzelp2_store = goertzelp;
 
-				gertzellogs[gertzellogs_head++] = g_goertzelp_store;
-				gertzellogs[gertzellogs_head++] = g_goertzelp2_store;
-				gertzellogs_head = gertzellogs_head & ((LOG_GOERTZEL_LIST*2)-1);
+//				gertzellogs[gertzellogs_head++] = g_goertzelp_store;
+//				gertzellogs[gertzellogs_head++] = g_goertzelp2_store;
+//				gertzellogs_head = gertzellogs_head & ((LOG_GOERTZEL_LIST*2)-1);
+//
+//			int32_t zp = gertzellogs[glread++];
+//			int32_t zp2 = gertzellogs[glread++];
+//			int32_t rr = (((int64_t)(g_goertzel_coefficient  ) * (int64_t)zp<<1)>>32) - (zp2);
+//			int32_t ri = (((int64_t)(g_goertzel_coefficient_s) * (int64_t)zp<<1)>>32);
 
 				int32_t zp = g_goertzelp_store;
 				int32_t zp2 = g_goertzelp2_store;
 				int32_t rr = (((int64_t)(g_goertzel_coefficient  ) * (int64_t)zp<<1)>>32) - (zp2);
 				int32_t ri = (((int64_t)(g_goertzel_coefficient_s) * (int64_t)zp<<1)>>32);
 
+				qibaselogs[qibaselogs_head++] = rr;
+				qibaselogs[qibaselogs_head++] = ri;
+				qibaselogs_head = qibaselogs_head & ((LOG_GOERTZEL_LIST*2)-1);
+
 				rr>>=2;
 				ri>>=2;
 
 				int s = rr * rr + ri * ri;
-				int intensity = 1<<( ( 32 - __builtin_clz(s) )/2);
+				//int intensity = 1<<( ( 32 - __builtin_clz(s) )/2);
+
+				int intensity = (abs(rr) + abs(ri)) * 26100 / 32768;
+				intensity = (intensity + s/intensity)/2;
 				intensity = (intensity + s/intensity)/2;
 				intensity = (intensity + s/intensity)/2;
 
@@ -430,7 +442,7 @@ void InnerLoop()
 
 		// Only display half of the list so the other half could
 		// be updated by the ISR.
-		int glread = gertzellogs_head+LOG_GOERTZEL_LIST*2/2;
+		int glread = qibaselogs_head+LOG_GOERTZEL_LIST*2/2;
 
 		
 		int intensity = 0;
@@ -438,18 +450,8 @@ void InnerLoop()
 		for( pxa = 0; pxa < LOG_GOERTZEL_LIST/2; pxa++ )
 		{
 			glread = (glread)&(LOG_GOERTZEL_LIST*2-1);
-			int32_t zp = gertzellogs[glread++];
-			int32_t zp2 = gertzellogs[glread++];
-			int32_t rr = (((int64_t)(g_goertzel_coefficient  ) * (int64_t)zp<<1)>>32) - (zp2);
-			int32_t ri = (((int64_t)(g_goertzel_coefficient_s) * (int64_t)zp<<1)>>32);
-
-			//rr>>=1;
-			//ri>>=1;
-
-			//int s = rr * rr + ri * ri;
-			//intensity = 1<<( ( 32 - __builtin_clz(s) )/2);
-			//intensity = (intensity + s/intensity)/2;
-			//intensity = (intensity + s/intensity)/2;
+			int rr = qibaselogs[glread++];
+			int ri = qibaselogs[glread++];
 
 			rr = rr * 100 / (intensity_max>>4);
 			ri = ri * 100 / (intensity_max>>4);
@@ -575,11 +577,6 @@ int main()
 	USBOTGSetup();
 	InnerLoop();
 }
-
-
-
-
-
 
 
 
