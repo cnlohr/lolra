@@ -5,6 +5,7 @@
 #define FUNCONF_USE_UARTPRINTF  0
 #define FUNCONF_USE_HSE 1
 #define FUNCONF_SYSTICK_USE_HCLK 1
+#define FUNCONF_ENABLE_HPE 0
 
 #endif
 

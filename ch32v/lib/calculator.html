@@ -1,14 +1,20 @@
 <!DOCTYPE html>
 <HTML>
 <HEAD>
+<LINK rel="shortcut icon" href="data:image/x-icon;," type="image/x-icon"> 
+<META charset="UTF-8">
 <STYLE>
 body {
   background-color: Canvas;
   color: CanvasText;
-  color-scheme: light dark;
 }
-
+:root {
+  color-scheme: dark;
+}
 </STYLE>
+
+<SCRIPT src=webhidcontrol.js></SCRIPT>
+
 <SCRIPT>
 
 
@@ -28,11 +34,11 @@ function Goertz( n, mhz, fr, brf )
 	let omega = fr * 3.1415926535*2.0;
 	var textarea = document.getElementById("goertzeloutput");
 	textarea.value = 
-		"#define PWM_PERIOD ("+n+"-1)\n" +
-		"#define GOERTZEL_BUFFER ("+brf+")\n" +
-		"const int32_t g_goertzel_omega_per_sample = " + ( omega*2*(1<<29)).toFixed(0) + "; // " + ( omega / (3.1415926535*2.0)).toFixed(6) + " of whole per step / " + mhz.toFixed(6) + "MHz\n" +
-		"const int32_t g_goertzel_coefficient = " + (2 * Math.cos( omega ) * (1<<30)).toFixed(0) + ";\n" +
-		"const int32_t g_goertzel_coefficient_s = "+ (2 * Math.sin( omega ) * (1<<30)).toFixed(0) + ";\n";
+		"int g_pwm_period = ("+n+"-1);\n" +
+		"int g_goertzel_buffer = ("+brf+");\n" +
+		"int32_t g_goertzel_omega_per_sample = " + ( omega*2*(1<<29)).toFixed(0) + "; // " + ( omega / (3.1415926535*2.0)).toFixed(6) + " of whole per step / " + mhz.toFixed(6) + "MHz\n" +
+		"int32_t g_goertzel_coefficient = " + (2 * Math.cos( omega ) * (1<<30)).toFixed(0) + ";\n" +
+		"int32_t g_goertzel_coefficient_s = "+ (2 * Math.sin( omega ) * (1<<30)).toFixed(0) + ";\n";
 
 	  // Highlight its content
 	  textarea.select();
@@ -184,12 +190,18 @@ function computeTable()
 	document.getElementById( "TABLE" ).innerHTML = contents;
 }
 
-
+function onLoad()
+{
+	onLoadWebHidControl();
+}
 </SCRIPT>
 </HEAD>
-<BODY>
+<BODY onLoad="onLoad()">
 
 <p>Tool for computing tuning to specific frequencies by use of direct ADC reading at specific timer-controlled rate to "tune" to specific frequencies either by quadrature or differential.</p>
+<TABLE>
+<TR>
+<TD VALIGN=TOP>
 <TABLE>
 <TR><TD>Crystal MHz</TD><TD><INPUT ID=crystalmhz VALUE=144></TD></TR>
 <TR><TD>Target MHz</TD><TD><INPUT ID=targetmhz VALUE=27.019360></TD></TR>
@@ -198,7 +210,13 @@ function computeTable()
 <TR><TD>Table Type</TD><TD><INPUT TYPE=RADIO ID=QUADRATURE NAME=computetype checked>Quadrature</INPUT><INPUT TYPE=RADIO ID=GOERTZELS NAME=computetype>Goertzels</INPUT></TD></TR>
 <TR><TD COLSPAN=2><INPUT TYPE=SUBMIT VALUE="Compute" ONCLICK="computeTable()"></TD></TR>
 </TABLE>
-
+</TD>
+<TD VALIGN=TOP>
+Live Control:
+<TABLE><TR><TD><INPUT TYPE=SUBMIT onClick="reqConnect()" VALUE="Open Device" ID=connectButton></TD><TD><DIV ID=STATUS></DIV></TD></TR></TABLE>
+<DIV ID="StatusPerf"></DIV>
+</TR>
+</TABLE>
 
 <DIV ID=TABLE></DIV>
 

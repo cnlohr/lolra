@@ -63,73 +63,72 @@ SOFTWARE.
 #include <math.h>
 
 #define SH1107_128x128
-
-//#define PWM_OUTPUT
+#define SSD1306_REMAP_I2C
+#define PWM_OUTPUT
 #define ENABLE_OLED
 #include "ssd1306_i2c.h"
 #include "ssd1306.h"
+#include "./usb_config.h"
+#include "../ch32v003fun/examples_v20x/otg_device/otgusb.h"
 
 
 #define ADC_BUFFSIZE 1024
 
 volatile uint16_t adc_buffer[ADC_BUFFSIZE];
 
-//#define PWM_PERIOD (31-1)
-//const int32_t g_goertzel_omega_per_sample = 1238618695; // 47/256 -> 27.01920 MHz
-//const int32_t g_goertzel_coefficient = 870249096;
-//const int32_t g_goertzel_coefficient_s = 1963250500;
+int g_volume_pwm = 127; // 0 - 127 (100%) (but you can go over 100)
 
 #if 0
-#define PWM_PERIOD (30-1)
-#define GOERTZEL_BUFFER (752)
-const int32_t g_goertzel_omega_per_sample = 2485087396; // 0.368351 of whole per step / 27.031915MHz
-const int32_t g_goertzel_coefficient = -1453756170;
-const int32_t g_goertzel_coefficient_s = 1580594514;
+int g_pwm_period = (30-1);
+int g_goertzel_buffer = (752);
+int32_t g_goertzel_omega_per_sample = 2485087396; // 0.368351 of whole per step / 27.031915MHz
+int32_t g_goertzel_coefficient = -1453756170;
+int32_t g_goertzel_coefficient_s = 1580594514;
+#endif
+
+#if 1
+int g_pwm_period = (30-1);
+int g_goertzel_buffer = (180);
+int32_t g_goertzel_omega_per_sample = 5509657063; // 0.816667 of whole per step / 0.880000MHz
+int32_t g_goertzel_coefficient = 873460290;
+int32_t g_goertzel_coefficient_s = -1961823932;
 #endif
 
 #if 0
-#define PWM_PERIOD (30-1)
-#define GOERTZEL_BUFFER (180)
-const int32_t g_goertzel_omega_per_sample = 5509657063; // 0.816667 of whole per step / 0.880000MHz
-const int32_t g_goertzel_coefficient = 873460290;
-const int32_t g_goertzel_coefficient_s = -1961823932;
-#endif
-
-#if 0
-#define PWM_PERIOD (31-1)
-#define GOERTZEL_BUFFER (412)
+int g_pwm_period = (31-1);
+int g_goertzel_buffer = (412);
 const int32_t g_goertzel_omega_per_sample = 1670254667; // 0.247573 of whole per step / 1.150016MHz
 const int32_t g_goertzel_coefficient = 32748822;
 const int32_t g_goertzel_coefficient_s = 2147233926;
 #endif
 
 #if 0
-#define PWM_PERIOD (30-1)
-#define GOERTZEL_BUFFER (576)
+int g_pwm_period = (30-1);
+int g_goertzel_buffer = (576);
 const int32_t g_goertzel_omega_per_sample = 1264972285; // 0.187500 of whole per step / 90.300000MHz
 const int32_t g_goertzel_coefficient = 821806413;
 const int32_t g_goertzel_coefficient_s = 1984016189;
 #endif
 
 #if 0
-#define PWM_PERIOD (30-1)
-#define GOERTZEL_BUFFER (320)
+int g_pwm_period = (30-1);
+int g_goertzel_buffer = (320);
 const int32_t g_goertzel_omega_per_sample = 990894956; // 0.146875 of whole per step / 101.505000MHz
 const int32_t g_goertzel_coefficient = 1296126516;
 const int32_t g_goertzel_coefficient_s = 1712233066;
 #endif
 
 #if 0
-#define PWM_PERIOD (30-1)
-#define GOERTZEL_BUFFER (384)
+int g_pwm_period = (30-1);
+int g_goertzel_buffer = (384);
 const int32_t g_goertzel_omega_per_sample = 4251712402; // 0.630208 of whole per step / 27.025000MHz
 const int32_t g_goertzel_coefficient = -1468003291;
 const int32_t g_goertzel_coefficient_s = -1567371161;
 #endif
 
-#if 1
-#define PWM_PERIOD (30-1)
-#define GOERTZEL_BUFFER (336)
+#if 0
+int g_pwm_period = (30-1);
+int g_goertzel_buffer = (336);
 const int32_t g_goertzel_omega_per_sample = 1827182189; // 0.270833 of whole per step / 89.900000MHz
 const int32_t g_goertzel_coefficient = -280302863;
 const int32_t g_goertzel_coefficient_s = 2129111628;
@@ -228,16 +227,15 @@ static void SetupTimer1()
 	RCC->APB2PRSTR &= ~RCC_APB2Periph_TIM1;
 
 	TIM1->PSC = 0;  // Prescalar to 0x0000 (so, 48MHz base clock)
-	TIM1->ATRLR = PWM_PERIOD;
+	TIM1->ATRLR = g_pwm_period;
 
 #ifdef PWM_OUTPUT
 	// PA9 = T1CH2.
-	GPIOA->CFGHR &= ~(0xf<<(4*1));
-	GPIOA->CFGHR |= (GPIO_Speed_2MHz | GPIO_CNF_OUT_PP_AF)<<(4*1);
+	funPinMode( PA9, GPIO_CFGLR_OUT_2Mhz_AF_PP );
 
 	TIM1->CCER = TIM_CC2E | TIM_CC2P;
 	TIM1->CHCTLR1 |= TIM_OC2M_2 | TIM_OC2M_1 | TIM_OC2FE;
-	TIM1->CH2CVR = 5;  // Actual duty cycle (Off to begin with)
+	TIM1->CH2CVR = 5;  // Set duty cycle somewhere random.
 
 	// Enable TIM1 outputs
 	TIM1->BDTR |= 0xc000;//TIM_MOE;
@@ -303,7 +301,6 @@ void DMA1_Channel1_IRQHandler( void )
 		// Add a tiny bias to the ADC to help keep goertz in range.
 		const int adc_offset = (-2048) << INFADC;
 
-
 		while( adc_tail != adc_buffer_end )
 		{
 
@@ -356,7 +353,7 @@ void DMA1_Channel1_IRQHandler( void )
 			adc_tail+=4;
 			goertzel_samples+=4;
 			if( adc_tail == adc_buffer_top ) adc_tail = adc_buffer;
-			if( goertzel_samples == GOERTZEL_BUFFER )
+			if( goertzel_samples == g_goertzel_buffer )
 			{
 				g_goertzelp_store = goertzel - (g_goertzel_omega_per_sample>>(29-16));
 				g_goertzelp2_store = goertzelp;
@@ -382,12 +379,9 @@ void DMA1_Channel1_IRQHandler( void )
 
 
 				#ifdef PWM_OUTPUT
-
-				intensity = intensity * PWM_PERIOD / (intensity_max>>7);
-
-				if( intensity >= PWM_PERIOD-1 ) intensity = PWM_PERIOD-2;
+				intensity = intensity * g_volume_pwm * g_pwm_period / (intensity_max>>(7-7));
+				if( intensity >= g_pwm_period-1 ) intensity = g_pwm_period-2;
 				if( intensity < 1 ) intensity = 1;
-
 				TIM1->CH2CVR = intensity;  // Actual duty cycle (Off to begin with)
 				#endif
 
@@ -410,13 +404,17 @@ void DMA1_Channel1_IRQHandler( void )
 	//GPIOD->BSHR = 1<<16; // Turn off GPIOD0 for profiling
 }
 
+static inline uint32_t gets2()
+{
+	uint32_t ret;
+	asm volatile( "mv %[ret], s2" : [ret]"=&r"(ret) );
+	return ret;
+}
 
 
 void InnerLoop()
 {
 	while(1){
-
-		int k;
 #if 0
 		int adcz = adc_buffer[0];
 		for( k = 0; k < 128; k++ )
@@ -470,13 +468,17 @@ void InnerLoop()
 		}
 
 #ifdef ENABLE_OLED
-		ssd1306_refresh();
-		ssd1306_setbuf(0);
-
 		char cts[32];
 		snprintf( cts, 32, "%d %d", intensity_max, intensity );
 
 		ssd1306_drawstr( 0, 0, cts, 1 );
+
+		ssd1306_refresh();
+		//static int ik = 0;
+		//printf( "%d %08x\n", ik, ssd1306_buffer[ik++] );
+		//if( ik == sizeof(ssd1306_buffer) ) ik = 0;
+
+		ssd1306_setbuf(0);
 #else
 		Delay_Ms(17);
 #endif
@@ -484,6 +486,8 @@ void InnerLoop()
 //		printf( "%6d %8d %8d - %8d %8d - %8d\n", g_goertzel_outs,g_goertzelp2_store, g_goertzelp_store, rr, ri, x );
 
 //		Delay_Ms(940);
+//printf( "!!!!\n ");
+
 	}
 
 }
@@ -530,7 +534,7 @@ int main()
 
 #ifdef ENABLE_OLED
 	ssd1306_i2c_setup();
-	uint8_t ret = ssd1306_i2c_init();
+	ssd1306_i2c_init();
 	ssd1306_init();
 	ssd1306_setbuf(0);
 #endif
@@ -565,5 +569,63 @@ int main()
 
 	SetupTimer1();
 
+
+	funPinMode( PA0, GPIO_CFGLR_OUT_10Mhz_PP );
+
+	USBOTGSetup();
 	InnerLoop();
 }
+
+
+
+
+
+
+
+
+
+
+uint8_t scratchpad[256];
+
+
+int HandleHidUserSetReportSetup( struct _USBState * ctx, tusb_control_request_t * req )
+{
+	int id = req->wValue & 0xff;
+	if( id == 0xaa )
+	{
+	//	memset( scratchpad, 0x55, sizeof(scratchpad) );
+		//printf( "SET REPORT! %d [%02x]\n", req->wLength, scratchpad[200] );
+		ctx->pCtrlPayloadPtr = scratchpad;
+		return req->wLength;
+	}
+	return 0;
+}
+
+int HandleHidUserGetReportSetup( struct _USBState * ctx, tusb_control_request_t * req )
+{
+	int id = req->wValue & 0xff;
+	if( id == 0xaa )
+	{
+		//printf( "GET REPORT! %d\n", req->wLength );
+		ctx->pCtrlPayloadPtr = scratchpad;
+		return 255;
+	}
+	return 0;
+}
+
+void HandleHidUserReportDataOut( struct _USBState * ctx, uint8_t * data, int len )
+{
+}
+
+int HandleHidUserReportDataIn( struct _USBState * ctx, uint8_t * data, int len )
+{
+//	printf( "IN %d %d %08x %08x\n", len, ctx->USBFS_SetupReqLen, data, FSUSBCTX.ENDPOINTS[0] );
+//	memset( data, 0xcc, len );
+	return len;
+}
+
+void HandleHidUserReportOutComplete( struct _USBState * ctx )
+{
+	return;
+}
+

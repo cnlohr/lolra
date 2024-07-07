@@ -62,7 +62,7 @@ SOFTWARE.
 #include <stdio.h>
 
 #define SH1107_128x128
-
+#define SSD1306_REMAP_I2C
 #include "ssd1306_i2c.h"
 #include "ssd1306.h"
 
@@ -86,7 +86,7 @@ void SetupADC()
 	// XXX TODO -look into PGA
 	// XXX TODO - Look into tag-teaming the ADCs
 
-	// PDA is analog input chl 7
+	// PA7 is analog input chl 7
 	GPIOA->CFGLR &= ~(0xf<<(4*7));	// CNF = 00: Analog, MODE = 00: Input
 	
 	// ADC CLK is chained off of APB2.
