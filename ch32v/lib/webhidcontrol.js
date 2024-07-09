@@ -3,7 +3,7 @@ const filter = { vendorId : 0x1209, productId : 0xd035 };
 let dev = null;
 let loopAbort = false;
 
-const IQHistoryLen = 2048;
+const IQHistoryLen = 4096;
 var IQHistoryArray = new Uint32Array(IQHistoryLen);
 var IQHistoryHead = 0|0;
 var lastIntensity = 1.0;
@@ -189,7 +189,7 @@ async function sendLoop()
 				document.getElementById( "StatusPerf" ).innerHTML = 
 					(kBsecAvg).toFixed(2) + " kBytes/s (Split between send and receive)<br>" +
 					(xActionSecAvg).toFixed(2)  + "transactions/sec<br>" +
-					"Good Count: " + goodCount + "<BR>Bad Count: " + badCount;
+					"Count: " + goodCount + " / " + badCount;
 				lastTime = thisTime;
 			}
 			else if( frameNo % updateStatsPerfPer == 2 )
