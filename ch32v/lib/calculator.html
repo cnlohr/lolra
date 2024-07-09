@@ -198,23 +198,34 @@ function onLoad()
 </HEAD>
 <BODY onLoad="onLoad()">
 
+<TABLE WIDTH=100%>
+<TR>
+<TD COLSPAN=3>
 <p>Tool for computing tuning to specific frequencies by use of direct ADC reading at specific timer-controlled rate to "tune" to specific frequencies either by quadrature or differential.</p>
-<TABLE>
+</TD>
+<TD ROWSPAN=2 VALIGN=TOP WIDTH=100% ID=LiveGraphContainer>
+<CANVAS WIDTH=100% HEIGHT=200 ID=LiveGraph> </CANVAS>
+</TD>
+</TR>
 <TR>
 <TD VALIGN=TOP>
-<TABLE>
+<TABLE WIDTH=480>
 <TR><TD>Crystal MHz</TD><TD><INPUT ID=crystalmhz VALUE=144></TD></TR>
 <TR><TD>Target MHz</TD><TD><INPUT ID=targetmhz VALUE=27.019360></TD></TR>
-<TR><TD>Quanta</TD><TD><INPUT ID=quanta VALUE=1024> (Goertzel's Algorithm Only)</TD></TR>
-<TR><TD>Quanta Search Range</TD><TD><INPUT ID=quantasearch VALUE=64> (Goertzel's Algorithm Only)</TD></TR>
+<TR><TD>Quanta</TD><TD><INPUT ID=quanta VALUE=1024> (Goertzel's Only)</TD></TR>
+<TR><TD>Quanta Search Range</TD><TD><INPUT ID=quantasearch VALUE=64> (Goertzel's Only)</TD></TR>
 <TR><TD>Table Type</TD><TD><INPUT TYPE=RADIO ID=QUADRATURE NAME=computetype checked>Quadrature</INPUT><INPUT TYPE=RADIO ID=GOERTZELS NAME=computetype>Goertzels</INPUT></TD></TR>
 <TR><TD COLSPAN=2><INPUT TYPE=SUBMIT VALUE="Compute" ONCLICK="computeTable()"></TD></TR>
 </TABLE>
 </TD>
 <TD VALIGN=TOP>
+
 Live Control:
 <TABLE><TR><TD><INPUT TYPE=SUBMIT onClick="reqConnect()" VALUE="Open Device" ID=connectButton></TD><TD><DIV ID=STATUS></DIV></TD></TR></TABLE>
 <DIV ID="StatusPerf"></DIV>
+</TD>
+
+</TD>
 </TR>
 </TABLE>
 

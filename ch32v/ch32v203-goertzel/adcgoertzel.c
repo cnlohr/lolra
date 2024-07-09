@@ -74,7 +74,7 @@ SOFTWARE.
 #include "./usb_config.h"
 #include "../ch32v003fun/examples_v20x/otg_device/otgusb.h"
 
-
+// Bigger buffer decreases chance of fall-through, but increases the size of each operation.
 #define ADC_BUFFSIZE 512
 
 volatile uint16_t adc_buffer[ADC_BUFFSIZE];
@@ -141,8 +141,8 @@ const int32_t g_goertzel_coefficient_s = 2129111628;
 int intensity_average = 1;
 
 #define LOG_GOERTZEL_LIST 512
-int16_t qibaselogs[LOG_GOERTZEL_LIST*2];
-int     qibaselogs_head;
+int32_t qibaselogs[LOG_GOERTZEL_LIST];
+volatile int     qibaselogs_head;
 
 void SetupADC()
 {
@@ -270,9 +270,14 @@ uint32_t g_goertzel_outs;
 int32_t g_goertzel, g_goertzelp, g_goertzelp2;
 int32_t g_goertzelp_store, g_goertzelp2_store;
 
+int32_t g_laststart = 0;
+int32_t g_lastper;
+int32_t g_lastlen;
+
 void DMA1_Channel1_IRQHandler( void ) __attribute__((interrupt));
 void DMA1_Channel1_IRQHandler( void ) 
 {
+	int32_t start = SysTick->CNT;
 #ifdef PROFILING_PIN
 	funDigitalWrite( PROFILING_PIN, 1 );
 #endif
@@ -360,26 +365,20 @@ void DMA1_Channel1_IRQHandler( void )
 			if( adc_tail == adc_buffer_top ) adc_tail = adc_buffer;
 			if( goertzel_samples == g_goertzel_buffer )
 			{
+#ifdef PROFILING_PIN
+	funDigitalWrite( PROFILING_PIN, 0 );
+#endif
+
 				g_goertzelp_store = goertzel - (g_goertzel_omega_per_sample>>(29-16));
 				g_goertzelp2_store = goertzelp;
-
-//				gertzellogs[gertzellogs_head++] = g_goertzelp_store;
-//				gertzellogs[gertzellogs_head++] = g_goertzelp2_store;
-//				gertzellogs_head = gertzellogs_head & ((LOG_GOERTZEL_LIST*2)-1);
-//
-//			int32_t zp = gertzellogs[glread++];
-//			int32_t zp2 = gertzellogs[glread++];
-//			int32_t rr = (((int64_t)(g_goertzel_coefficient  ) * (int64_t)zp<<1)>>32) - (zp2);
-//			int32_t ri = (((int64_t)(g_goertzel_coefficient_s) * (int64_t)zp<<1)>>32);
 
 				int32_t zp = g_goertzelp_store;
 				int32_t zp2 = g_goertzelp2_store;
 				int32_t rr = (((int64_t)(g_goertzel_coefficient  ) * (int64_t)zp<<1)>>32) - (zp2);
 				int32_t ri = (((int64_t)(g_goertzel_coefficient_s) * (int64_t)zp<<1)>>32);
 
-				qibaselogs[qibaselogs_head++] = rr;
-				qibaselogs[qibaselogs_head++] = ri;
-				qibaselogs_head = qibaselogs_head & ((LOG_GOERTZEL_LIST*2)-1);
+				qibaselogs[qibaselogs_head] = ((uint16_t)rr) | (((uint16_t)ri)<<16);
+				qibaselogs_head = ( qibaselogs_head + 1 ) & ((LOG_GOERTZEL_LIST)-1);
 
 				rr>>=2;
 				ri>>=2;
@@ -390,7 +389,6 @@ void DMA1_Channel1_IRQHandler( void )
 				int intensity = (ABS(rr) + ABS(ri)) * 26100 / 32768; // Found experimentally (Also try to avoid divide-by-zero.
 				if( intensity == 0 )
 					intensity = 1;
-				intensity = (intensity + s/intensity)/2;
 				intensity = (intensity + s/intensity)/2;
 				intensity = (intensity + s/intensity)/2;
 				intensity_average = intensity_average - (intensity_average>>10) + (intensity);
@@ -407,6 +405,10 @@ void DMA1_Channel1_IRQHandler( void )
 				goertzel = g_goertzel_omega_per_sample>>(29-16);
 				goertzelp = 0;
 				goertzel_samples = 0;
+#ifdef PROFILING_PIN
+	funDigitalWrite( PROFILING_PIN, 1 );
+#endif
+
 			}
 		}
 
@@ -421,6 +423,10 @@ void DMA1_Channel1_IRQHandler( void )
 #ifdef PROFILING_PIN
 	funDigitalWrite( PROFILING_PIN, 0 ); // For profiling
 #endif
+	int32_t end = SysTick->CNT;
+	g_lastper = start - g_laststart;
+	g_laststart = start;
+	g_lastlen = end - start;
 }
 
 static inline uint32_t gets2()
@@ -449,16 +455,17 @@ void InnerLoop()
 
 		// Only display half of the list so the other half could
 		// be updated by the ISR.
-		int glread = qibaselogs_head+LOG_GOERTZEL_LIST*2/2;
+		int glread = qibaselogs_head;
 
-		
 		int intensity = 0;
 
-		for( pxa = 0; pxa < LOG_GOERTZEL_LIST/2; pxa++ )
+		for( pxa = 0; pxa < LOG_GOERTZEL_LIST; pxa++ )
 		{
-			glread = (glread)&(LOG_GOERTZEL_LIST*2-1);
-			int rr = qibaselogs[glread++];
-			int ri = qibaselogs[glread++];
+			uint32_t combiq = qibaselogs[glread];
+			glread = ( glread + 1 ) & ( LOG_GOERTZEL_LIST -1 );
+
+			int16_t rr = combiq & 0xffff;
+			int16_t ri = combiq >> 16;
 
 			rr = rr * 512 / (intensity_average>>4);
 			ri = ri * 512 / (intensity_average>>4);
@@ -477,10 +484,9 @@ void InnerLoop()
 		}
 
 #ifdef ENABLE_OLED
-		char cts[32];
-		snprintf( cts, 32, "%d", intensity_average );
-
-		ssd1306_drawstr( 0, 0, cts, 1 );
+		//char cts[32];
+		//snprintf( cts, 32, "%d", intensity_average );
+		//ssd1306_drawstr( 0, 0, cts, 1 );
 
 		ssd1306_refresh();
 		//static int ik = 0;
@@ -599,21 +605,19 @@ int main()
 
 
 
-uint8_t scratchpad[256];
+uint8_t scratchpad[512];
 int g_isConfigurePacket = 0;
 
 int HandleHidUserSetReportSetup( struct _USBState * ctx, tusb_control_request_t * req )
 {
 	int id = req->wValue & 0xff;
 	g_isConfigurePacket = 0;
-	if( id == 0xaa && req->wLength < sizeof( scratchpad ) )
+	if( id == 0xaa && req->wLength <= sizeof( scratchpad ) )
 	{
-	//	memset( scratchpad, 0x55, sizeof(scratchpad) );
-		//printf( "SET REPORT! %d [%02x]\n", req->wLength, scratchpad[200] );
 		ctx->pCtrlPayloadPtr = scratchpad;
 		return req->wLength;
 	}
-	else if( id == 0xac && req->wLength < sizeof( scratchpad ) )
+	else if( id == 0xac && req->wLength <= sizeof( scratchpad ) )
 	{
 		g_isConfigurePacket = 1;
 		ctx->pCtrlPayloadPtr = scratchpad;
@@ -627,9 +631,39 @@ int HandleHidUserGetReportSetup( struct _USBState * ctx, tusb_control_request_t 
 	int id = req->wValue & 0xff;
 	if( id == 0xaa )
 	{
-		//printf( "GET REPORT! %d\n", req->wLength );
 		ctx->pCtrlPayloadPtr = scratchpad;
 		return 255;
+	}
+	else if( id == 0xac )
+	{
+		g_isConfigurePacket = 1;
+		ctx->pCtrlPayloadPtr = scratchpad;
+		return 63;
+	}
+	else if( id == 0xad )
+	{
+		static int last_baselog;
+
+		int samps_to_send = (qibaselogs_head - last_baselog + LOG_GOERTZEL_LIST * 2 - 1) & (LOG_GOERTZEL_LIST-1);
+		if( samps_to_send > 120 ) samps_to_send = 120;
+
+		((uint32_t*)scratchpad)[0] = (intensity_average<<8) | samps_to_send;
+		((uint32_t*)scratchpad)[1] = (g_lastper<<16) | g_lastlen;
+		((uint32_t*)scratchpad)[2] = 0; //Reserved.
+
+		int i;
+		for( i = 3; i < samps_to_send + 3; i++ )
+		{
+			last_baselog = (last_baselog+1)&(LOG_GOERTZEL_LIST-1);
+			((uint32_t*)(scratchpad))[i] = ((int32_t*)qibaselogs)[last_baselog];
+		}
+
+		for( ; i < 128; i++ )
+			((uint32_t*)(scratchpad))[i]  = 0;
+			
+
+		ctx->pCtrlPayloadPtr = scratchpad;
+		return 510;
 	}
 	return 0;
 }

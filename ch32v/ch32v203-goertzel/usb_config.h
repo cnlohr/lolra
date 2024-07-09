@@ -50,7 +50,7 @@ static const uint8_t HIDAPIRepDesc[ ] =
 		HID_REPORT_ID      ( 0xac )
 		HID_USAGE          ( 0x01 ),	
 		HID_FEATURE        ( HID_DATA | HID_VARIABLE | HID_ABSOLUTE ) ,
-		HID_REPORT_COUNT   ( 254 ), // For receiving IQ data on host.
+		HID_REPORT_COUNT_N   ( 510,2 ), // For receiving IQ data on host.
 		HID_REPORT_ID      ( 0xad )
 		HID_USAGE          ( 0x01 ),	
 		HID_FEATURE        ( HID_DATA | HID_VARIABLE | HID_ABSOLUTE ) ,

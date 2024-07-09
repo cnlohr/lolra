@@ -3,6 +3,23 @@ const filter = { vendorId : 0x1209, productId : 0xd035 };
 let dev = null;
 let loopAbort = false;
 
+const IQHistoryLen = 2048;
+var IQHistoryArray = new Uint32Array(IQHistoryLen);
+var IQHistoryHead = 0|0;
+var lastIntensity = 1.0;
+var lastNumQ = 0;
+var lastTotalTime = 1;
+var lastTimeUsed = 1;
+
+var graphIsClicked = false;
+
+function graphClick( e )
+{
+	if( e.type == "mousedown" ) graphIsClicked = true;
+	if( e.type == "mouseup" ) graphIsClicked = false;
+	return true;
+}
+
 function setStatus( msg )
 {
 	document.getElementById( "STATUS" ).innerHTML = msg;
@@ -43,6 +60,10 @@ async function closeDeviceTool()
 
 function onLoadWebHidControl()
 {
+	liveGraph = document.getElementById( "LiveGraph" );
+	liveGraph.addEventListener( "mousedown", graphClick );
+	liveGraph.addEventListener( "mouseup", graphClick );
+
 	setTimeout( sendLoop, 1 );
 
 	if( !navigator.hid )
@@ -118,25 +139,26 @@ async function sendLoopError( e )
 async function sendLoop()
 {
 	const sleep = ms => new Promise(r => setTimeout(r, ms));
-	var arraySend = new Uint8Array(255);
+	//var arraySend = new Uint8Array(255);
 	var frameNo = 0|0;
 	var lastTime = performance.now();
 	let goodCount = 0;
 	let badCount = 0;
 	let kBsecAvg = 0;
 	let xActionSecAvg = 0;
+
 	while( true )
 	{
 		if( dev && !loopAbort )
 		{
-			var i = 0|0;
-			for( var i = 0|0; i < 255|0; i++ )
-				arraySend[i] = (Math.random()*256)|0;
+			//var i = 0|0;
+			//for( var i = 0|0; i < 255|0; i++ )
+			//	arraySend[i] = (Math.random()*256)|0;
 
-			sendReport = dev.sendFeatureReport( 0xAA, arraySend ).catch( sendLoopError );
-			if( !sendReport ) sendLoopError( "error creating sendFeatureReport" );
+			//sendReport = dev.sendFeatureReport( 0xAA, arraySend ).catch( sendLoopError );
+			//if( !sendReport ) sendLoopError( "error creating sendFeatureReport" );
 
-			receiveReport = dev.receiveFeatureReport( 0xAA ).catch( sendLoopError );
+			receiveReport = dev.receiveFeatureReport( 0xAD ).catch( sendLoopError );
 			if( !receiveReport ) sendLoopError( "error creating receiveReport" );
 
 			frameNo++;
@@ -157,6 +179,63 @@ async function sendLoop()
 					"Good Count: " + goodCount + "<BR>Bad Count: " + badCount;
 				lastTime = thisTime;
 			}
+			else if( frameNo % updateStatsPerfPer == 2 )
+			{
+				const ctx = liveGraph.getContext("2d");
+
+				if( !graphIsClicked )
+				{
+					let liveGraphContainer = document.getElementById( "LiveGraphContainer" );
+					liveGraph.width = liveGraphContainer.clientWidth;
+					liveGraph.style.position = 'absolute';
+
+					ctx.clearRect(0, 0, liveGraph.width, liveGraph.height);
+
+
+					var filledness = lastNumQ * 198 / 120;
+					ctx.fillStyle = "rgb( 240 240 240 )";
+					ctx.fillRect( 2, 2 + 198 - filledness, 18, filledness - 2);
+
+					filledness = ( lastTimeUsed * 1.0 / lastTotalTime ) * 198;
+					ctx.fillStyle = "rgb( 240 240 240 )";
+					ctx.fillRect( 26, 2 + 198 - filledness, 18, filledness - 2 );
+
+					ctx.fillStyle = `rgb( 255 255 255 )`;
+
+					let mulcoeff = 10000.0 / lastIntensity;
+					var lot = 1.2;
+					var x = 253+IQHistoryLen;
+					for( var i = (IQHistoryHead+1) & (IQHistoryLen-1); i != IQHistoryHead|0; i = (i + 1) & (IQHistoryLen-1) )
+					{
+						let v = IQHistoryArray[i];
+						let real = (v >> 16);
+						let imag = (v & 0xffff);
+						if( real > 32767 ) real -= 65536;
+						if( imag > 32767 ) imag -= 65536;
+						let power = Math.sqrt( real * real + imag * imag ) * mulcoeff;
+						let phase = Math.atan2( real, imag ) * 0.159155078*0.5;
+						real = real * mulcoeff + 100;
+						imag = imag * mulcoeff + 100;
+						if( real < 0 ) real = 0; if( real > 255 ) real = 255;
+						if( imag < 0 ) imag = 0; if( imag > 255 ) imag = 255;
+						ctx.fillRect(x,power+10,2,2);
+						ctx.fillRect(x,phase*140+150,2,2);
+						x--;
+						ctx.globalAlpha = (lot>0)?lot:0;
+						ctx.fillRect(real+50,imag,2,2);
+						ctx.globalAlpha = 1.0;
+						lot -= 0.0015;
+					}
+
+					ctx.strokeStyle = "rgb( 128 128 128 )";
+					ctx.fillStyle = "rgb( 128 0 0 )";
+					ctx.strokeRect( 1, 1, 20, 198 );
+					ctx.strokeRect( 25, 1, 20, 198 );
+					ctx.strokeRect( 49, 1, 200, 198 );
+					ctx.strokeRect( 253, 1, liveGraph.width, 198 );
+				}
+			}
+
 
 			if( sendReport )
 			{
@@ -164,28 +243,25 @@ async function sendLoop()
 			}
 			if( receiveReport )
 			{
-				// Validate Data.
 				let receiveData = await receiveReport;
 				if( receiveData && receiveData.buffer )
 				{
-					let data = new Uint8Array( receiveData.buffer );
-
-					// Tricky: Data goes:
-					//  reportID -> Payload...
-					let failed = false;
-					for( var i = 0|0; i < 254|0; i++ )
+					let data = new Uint32Array( receiveData.buffer.slice( 0, 508 ) );
+					let intensity = data[0]>>8;
+					let numq = data[0] & 0xff;
+					let time_total = data[1]>>16;
+					let time_used  = data[1]&0xffff;
+					//console.log( data );
+					for( var i = 0|0; i < numq; i++ )
 					{
-						if( data[i+1] != arraySend[i] )
-						{
-							console.log( "Disagreement at index " + i );
-							console.log( data );
-							console.log( arraySend );
-							badCount++;
-							failed = true;
-							break;
-						}
+						IQHistoryArray[IQHistoryHead++] = data[i+3];
+						if( IQHistoryHead == IQHistoryLen ) IQHistoryHead = 0;
 					}
-					if( !failed ) goodCount++;
+					lastIntensity = intensity;
+					lastNumQ = numq;
+					lastTotalTime = time_total;
+					lastTimeUsed = time_used;
+					goodCount++;
 				}
 				else
 				{
@@ -217,7 +293,7 @@ async function sendLoop()
 				await sleep(100);
 				if( dev )
 				{
-					break;
+					//break;
 				}
 			}
 		}
