@@ -60,19 +60,22 @@ SOFTWARE.
 
 #include "ch32v003fun.h"
 #include <stdio.h>
+#include <stdlib.h>
 #include <math.h>
 
 #define SH1107_128x128
 #define SSD1306_REMAP_I2C
 #define PWM_OUTPUT
 #define ENABLE_OLED
+#define PROFILING_PIN PA0
+
 #include "ssd1306_i2c.h"
 #include "ssd1306.h"
 #include "./usb_config.h"
 #include "../ch32v003fun/examples_v20x/otg_device/otgusb.h"
 
 
-#define ADC_BUFFSIZE 1024
+#define ADC_BUFFSIZE 512
 
 volatile uint16_t adc_buffer[ADC_BUFFSIZE];
 
@@ -135,7 +138,7 @@ const int32_t g_goertzel_coefficient_s = 2129111628;
 #endif
 
 
-int intensity_max = 1;
+int intensity_average = 1;
 
 #define LOG_GOERTZEL_LIST 512
 int16_t qibaselogs[LOG_GOERTZEL_LIST*2];
@@ -262,7 +265,6 @@ uint32_t tc;
 
 volatile uint16_t * adc_tail = adc_buffer;
 
-
 uint32_t g_goertzel_samples;
 uint32_t g_goertzel_outs;
 int32_t g_goertzel, g_goertzelp, g_goertzelp2;
@@ -271,7 +273,9 @@ int32_t g_goertzelp_store, g_goertzelp2_store;
 void DMA1_Channel1_IRQHandler( void ) __attribute__((interrupt));
 void DMA1_Channel1_IRQHandler( void ) 
 {
-	//GPIOD->BSHR = 1;	 // Turn on GPIOD0 for profiling
+#ifdef PROFILING_PIN
+	funDigitalWrite( PROFILING_PIN, 1 );
+#endif
 
 	// Timer goes backwards when we are moving forwards.
 	volatile uint16_t * adc_buffer_end = 0;
@@ -285,6 +289,7 @@ void DMA1_Channel1_IRQHandler( void )
 	uint32_t goertzel_samples = g_goertzel_samples;
 	// Backup flags.
 	volatile int intfr = DMA1->INTFR;
+
 	do
 	{
 		// Clear all possible flags.
@@ -381,17 +386,18 @@ void DMA1_Channel1_IRQHandler( void )
 
 				int s = rr * rr + ri * ri;
 				//int intensity = 1<<( ( 32 - __builtin_clz(s) )/2);
-
-				int intensity = (abs(rr) + abs(ri)) * 26100 / 32768;
+				#define ABS(x) (((x)<0)?-(x):(x))
+				int intensity = (ABS(rr) + ABS(ri)) * 26100 / 32768; // Found experimentally (Also try to avoid divide-by-zero.
+				if( intensity == 0 )
+					intensity = 1;
 				intensity = (intensity + s/intensity)/2;
 				intensity = (intensity + s/intensity)/2;
 				intensity = (intensity + s/intensity)/2;
-
-				intensity_max = intensity_max - (intensity_max>>10) + (intensity>>2);
+				intensity_average = intensity_average - (intensity_average>>10) + (intensity);
 
 
 				#ifdef PWM_OUTPUT
-				intensity = intensity * g_volume_pwm * g_pwm_period / (intensity_max>>(7-7));
+				intensity = intensity * g_volume_pwm * g_pwm_period / (intensity_average>>(10-8));
 				if( intensity >= g_pwm_period-1 ) intensity = g_pwm_period-2;
 				if( intensity < 1 ) intensity = 1;
 				TIM1->CH2CVR = intensity;  // Actual duty cycle (Off to begin with)
@@ -404,7 +410,6 @@ void DMA1_Channel1_IRQHandler( void )
 			}
 		}
 
-
 		intfr = DMA1->INTFR;
 	} while( intfr & DMA1_IT_GL1 );
 
@@ -412,8 +417,10 @@ void DMA1_Channel1_IRQHandler( void )
 	g_goertzelp = goertzelp;
 	g_goertzel = goertzel;
 	g_goertzel_samples = goertzel_samples;
-
-	//GPIOD->BSHR = 1<<16; // Turn off GPIOD0 for profiling
+ 
+#ifdef PROFILING_PIN
+	funDigitalWrite( PROFILING_PIN, 0 ); // For profiling
+#endif
 }
 
 static inline uint32_t gets2()
@@ -453,8 +460,8 @@ void InnerLoop()
 			int rr = qibaselogs[glread++];
 			int ri = qibaselogs[glread++];
 
-			rr = rr * 100 / (intensity_max>>4);
-			ri = ri * 100 / (intensity_max>>4);
+			rr = rr * 512 / (intensity_average>>4);
+			ri = ri * 512 / (intensity_average>>4);
 
 			rr += 64;
 			ri += 64;
@@ -471,7 +478,7 @@ void InnerLoop()
 
 #ifdef ENABLE_OLED
 		char cts[32];
-		snprintf( cts, 32, "%d %d", intensity_max, intensity );
+		snprintf( cts, 32, "%d", intensity_average );
 
 		ssd1306_drawstr( 0, 0, cts, 1 );
 
@@ -481,6 +488,7 @@ void InnerLoop()
 		//if( ik == sizeof(ssd1306_buffer) ) ik = 0;
 
 		ssd1306_setbuf(0);
+
 #else
 		Delay_Ms(17);
 #endif
@@ -537,8 +545,14 @@ int main()
 #ifdef ENABLE_OLED
 	ssd1306_i2c_setup();
 	ssd1306_i2c_init();
-	ssd1306_init();
-	ssd1306_setbuf(0);
+
+	if( ssd1306_init() )
+		printf( "Failed to initialize OLED\n" );
+	else
+		printf( "Initialized OLED\n" );
+
+	ssd1306_setbuf(1);
+	ssd1306_refresh();
 #endif
 
 #if 0
@@ -569,12 +583,15 @@ int main()
 	EXTEN->EXTEN_CTR |= EXTEN_OPA_NSEL;
 #endif
 
+#ifdef PROFILING_PIN
+	funPinMode( PROFILING_PIN, GPIO_CFGLR_OUT_50Mhz_PP );
+#endif
+
 	SetupTimer1();
 
-
-	funPinMode( PA0, GPIO_CFGLR_OUT_10Mhz_PP );
-
 	USBOTGSetup();
+
+
 	InnerLoop();
 }
 
@@ -583,15 +600,22 @@ int main()
 
 
 uint8_t scratchpad[256];
-
+int g_isConfigurePacket = 0;
 
 int HandleHidUserSetReportSetup( struct _USBState * ctx, tusb_control_request_t * req )
 {
 	int id = req->wValue & 0xff;
-	if( id == 0xaa )
+	g_isConfigurePacket = 0;
+	if( id == 0xaa && req->wLength < sizeof( scratchpad ) )
 	{
 	//	memset( scratchpad, 0x55, sizeof(scratchpad) );
 		//printf( "SET REPORT! %d [%02x]\n", req->wLength, scratchpad[200] );
+		ctx->pCtrlPayloadPtr = scratchpad;
+		return req->wLength;
+	}
+	else if( id == 0xac && req->wLength < sizeof( scratchpad ) )
+	{
+		g_isConfigurePacket = 1;
 		ctx->pCtrlPayloadPtr = scratchpad;
 		return req->wLength;
 	}
@@ -623,6 +647,11 @@ int HandleHidUserReportDataIn( struct _USBState * ctx, uint8_t * data, int len )
 
 void HandleHidUserReportOutComplete( struct _USBState * ctx )
 {
+	if( g_isConfigurePacket )
+	{
+		printf( "Is Configure Packet\n" );
+		g_isConfigurePacket = 0;
+	}
 	return;
 }
 
