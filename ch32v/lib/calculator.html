@@ -33,18 +33,24 @@ function Goertz( n, mhz, fr, brf )
 {
 	let omega = fr * 3.1415926535*2.0;
 	var textarea = document.getElementById("goertzeloutput");
+
+	var g_goertzel_omega_per_sample = Math.round( ( omega*2*(1<<29)) );
+	var g_goertzel_coefficient = Math.round( (2 * Math.cos( omega ) * (1<<30)) );
+	var g_goertzel_coefficient_s = Math.round( (2 * Math.sin( omega ) * (1<<30)) );
 	textarea.value = 
 		"int g_pwm_period = ("+n+"-1);\n" +
 		"int g_goertzel_buffer = ("+brf+");\n" +
-		"int32_t g_goertzel_omega_per_sample = " + ( omega*2*(1<<29)).toFixed(0) + "; // " + ( omega / (3.1415926535*2.0)).toFixed(6) + " of whole per step / " + mhz.toFixed(6) + "MHz\n" +
-		"int32_t g_goertzel_coefficient = " + (2 * Math.cos( omega ) * (1<<30)).toFixed(0) + ";\n" +
-		"int32_t g_goertzel_coefficient_s = "+ (2 * Math.sin( omega ) * (1<<30)).toFixed(0) + ";\n";
+		"int32_t g_goertzel_omega_per_sample = " + g_goertzel_coefficient.toFixed(0) + "; // " + ( omega / (3.1415926535*2.0)).toFixed(6) + " of whole per step / " + mhz.toFixed(6) + "MHz\n" +
+		"int32_t g_goertzel_coefficient = " + g_goertzel_coefficient.toFixed(0) + ";\n" +
+		"int32_t g_goertzel_coefficient_s = " + g_goertzel_coefficient_s.toFixed(0) + ";\n";
 
-	  // Highlight its content
-	  textarea.select();
+	// Highlight its content
+	textarea.select();
 
-	  // Copy the highlighted text
-	  document.execCommand("copy");
+	// Copy the highlighted text
+	document.execCommand("copy");
+
+	updateWebHidDeviceWithParameters( [ (n-1)|0, brf|0, g_goertzel_omega_per_sample|0, g_goertzel_coefficient|0, g_goertzel_coefficient_s|0 ] );
 }
 
 function computeTable()

@@ -136,10 +136,30 @@ async function sendLoopError( e )
 	setStatusError( e );
 }
 
+function updateWebHidDeviceWithParameters( paramlist )
+{
+	var i = 0|0;
+	var arraySend = new Uint8Array(63);
+	for( var i = 0|0; i < paramlist.length|0; i++ )
+	{
+		var vv = paramlist[i] | 0;
+		arraySend[i*4+7] = (vv>>0)&0xff;
+		arraySend[i*4+8] = (vv>>8)&0xff;
+		arraySend[i*4+9] = (vv>>16)&0xff;
+		arraySend[i*4+10] = (vv>>24)&0xff;
+	}
+	arraySend[3] = paramlist.length | 0;
+
+	console.log( arraySend );
+
+	sendReport = dev.sendFeatureReport( 0xAC, arraySend ).catch( sendLoopError );
+	if( !sendReport ) sendLoopError( "error creating sendFeatureReport" );
+}
+
+
 async function sendLoop()
 {
 	const sleep = ms => new Promise(r => setTimeout(r, ms));
-	//var arraySend = new Uint8Array(255);
 	var frameNo = 0|0;
 	var lastTime = performance.now();
 	let goodCount = 0;
@@ -151,13 +171,6 @@ async function sendLoop()
 	{
 		if( dev && !loopAbort )
 		{
-			//var i = 0|0;
-			//for( var i = 0|0; i < 255|0; i++ )
-			//	arraySend[i] = (Math.random()*256)|0;
-
-			//sendReport = dev.sendFeatureReport( 0xAA, arraySend ).catch( sendLoopError );
-			//if( !sendReport ) sendLoopError( "error creating sendFeatureReport" );
-
 			receiveReport = dev.receiveFeatureReport( 0xAD ).catch( sendLoopError );
 			if( !receiveReport ) sendLoopError( "error creating receiveReport" );
 

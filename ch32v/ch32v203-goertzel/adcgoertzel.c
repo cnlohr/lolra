@@ -89,7 +89,7 @@ int32_t g_goertzel_coefficient = -1453756170;
 int32_t g_goertzel_coefficient_s = 1580594514;
 #endif
 
-#if 1
+#if 0
 int g_pwm_period = (30-1);
 int g_goertzel_buffer = (180);
 int32_t g_goertzel_omega_per_sample = 5509657063; // 0.816667 of whole per step / 0.880000MHz
@@ -105,12 +105,12 @@ const int32_t g_goertzel_coefficient = 32748822;
 const int32_t g_goertzel_coefficient_s = 2147233926;
 #endif
 
-#if 0
+#if 1
 int g_pwm_period = (30-1);
 int g_goertzel_buffer = (576);
-const int32_t g_goertzel_omega_per_sample = 1264972285; // 0.187500 of whole per step / 90.300000MHz
-const int32_t g_goertzel_coefficient = 821806413;
-const int32_t g_goertzel_coefficient_s = 1984016189;
+int32_t g_goertzel_omega_per_sample = 1264972285; // 0.187500 of whole per step / 90.300000MHz
+int32_t g_goertzel_coefficient = 821806413;
+int32_t g_goertzel_coefficient_s = 1984016189;
 #endif
 
 #if 0
@@ -683,7 +683,23 @@ void HandleHidUserReportOutComplete( struct _USBState * ctx )
 {
 	if( g_isConfigurePacket )
 	{
-		printf( "Is Configure Packet\n" );
+
+		uint32_t * configs = (uint32_t*)scratchpad;
+		// Note: configs[0] == 0xac (command type)
+
+		printf( "Is Configure Packet %08x\n", configs[1] );
+
+		int numconfigs = configs[1];
+		if( numconfigs > 0) g_pwm_period = configs[2];
+		if( numconfigs > 1) g_goertzel_buffer = configs[3];
+		if( numconfigs > 2) g_goertzel_omega_per_sample = configs[4]; // 0.816667 of whole per step / 0.880000MHz
+		if( numconfigs > 3) g_goertzel_coefficient = configs[5];
+		if( numconfigs > 4) g_goertzel_coefficient_s = configs[6];
+
+		// Need to reset so we don't blast by.
+		g_goertzel_samples = 0;
+		TIM1->ATRLR = g_pwm_period;
+
 		g_isConfigurePacket = 0;
 	}
 	return;
