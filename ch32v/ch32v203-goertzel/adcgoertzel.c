@@ -89,7 +89,7 @@ int32_t g_goertzel_coefficient = -1453756170;
 int32_t g_goertzel_coefficient_s = 1580594514;
 #endif
 
-#if 0
+#if 1
 int g_pwm_period = (30-1);
 int g_goertzel_buffer = (180);
 int32_t g_goertzel_omega_per_sample = 5509657063; // 0.816667 of whole per step / 0.880000MHz
@@ -105,7 +105,7 @@ const int32_t g_goertzel_coefficient = 32748822;
 const int32_t g_goertzel_coefficient_s = 2147233926;
 #endif
 
-#if 1
+#if 0
 int g_pwm_period = (30-1);
 int g_goertzel_buffer = (576);
 int32_t g_goertzel_omega_per_sample = 1264972285; // 0.187500 of whole per step / 90.300000MHz

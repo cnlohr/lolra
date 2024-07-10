@@ -58,6 +58,77 @@ async function closeDeviceTool()
 	setStatusError( "Disconnected" );
 }
 
+
+
+async function toggleAudio()
+{
+var bypass = '\
+class PlayingAudioProcessor extends AudioWorkletProcessor {\
+	static get parameterDescriptors() {\
+	  return [\
+	   {\
+		  name: "ingestRate",\
+		  defaultValue: 25000,\
+		  minValue: 1,\
+		  maxValue: 1000000\
+		},\
+		]\
+	};\
+	constructor() {\
+		super();\
+		this.port.onmessage = (e) => {\
+		      console.log(e.data);\
+			  this.ingestData = e.data;\
+		};\
+		this.ingestData = new ArrayBuffer(0);\
+	}\
+	\
+	process(inputs, outputs, parameters) {\
+		/*console.log( parameters.ingestRate[0] );*/ \
+		/*console.log( this.ingestData );*/ \
+		let len = outputs[0][0].length; \
+		for (let b = 0|0; b < len|0; b++) { \
+			outputs[0][0][b] = Math.random()*0.01; \
+		} \
+		return true; \
+	} \
+} \
+\
+registerProcessor("playing-audio-processor", PlayingAudioProcessor);';
+
+// The following mechanism does not work on Chrome.
+//	const dataURI = URL.createObjectURL( new Blob([bypass], { type: 'text/javascript', } ) );
+
+
+	// Extremely tricky trick to side-step local file:// CORS issues.
+	// https://stackoverflow.com/a/67125196/2926815
+	// https://stackoverflow.com/a/72180421/2926815
+	let blob = new Blob([bypass], {type: 'application/javascript'});
+    let reader = new FileReader();
+    await reader.readAsDataURL(blob);
+    let dataURI = await new Promise((res) => {
+        reader.onloadend = function () {
+            res(reader.result);
+        }
+    });
+
+	var audioContext = new AudioContext();
+
+    await audioContext.audioWorklet.addModule(dataURI);
+
+	PlayingAudioProcessor = new AudioWorkletNode(
+		audioContext,
+		"playing-audio-processor"
+	);
+	PlayingAudioProcessor.connect(audioContext.destination);
+	audioContext.resume();
+
+	let testParam = PlayingAudioProcessor.parameters.get("ingestRate");
+	testParam.setValueAtTime(1000, audioContext.currentTime);
+
+	PlayingAudioProcessor.port.postMessage( new ArrayBuffer(0) );
+}
+
 function onLoadWebHidControl()
 {
 	liveGraph = document.getElementById( "LiveGraph" );
@@ -174,7 +245,7 @@ async function sendLoop()
 			receiveReport = dev.receiveFeatureReport( 0xAD ).catch( sendLoopError );
 			if( !receiveReport ) sendLoopError( "error creating receiveReport" );
 
-			frameNo++;
+			frameNo++
 
 			const updateStatsPerfPer = 4;
 			if( frameNo % updateStatsPerfPer == 0 )
