@@ -58,75 +58,125 @@ async function closeDeviceTool()
 	setStatusError( "Disconnected" );
 }
 
-
+var playingAudioProcessor = null;
+var audioContext = null;
 
 async function toggleAudio()
 {
-var bypass = '\
-class PlayingAudioProcessor extends AudioWorkletProcessor {\
-	static get parameterDescriptors() {\
-	  return [\
-	   {\
-		  name: "ingestRate",\
-		  defaultValue: 25000,\
-		  minValue: 1,\
-		  maxValue: 1000000\
-		},\
-		]\
-	};\
-	constructor() {\
-		super();\
-		this.port.onmessage = (e) => {\
-		      console.log(e.data);\
-			  this.ingestData = e.data;\
-		};\
-		this.ingestData = new ArrayBuffer(0);\
-	}\
-	\
-	process(inputs, outputs, parameters) {\
-		/*console.log( parameters.ingestRate[0] );*/ \
-		/*console.log( this.ingestData );*/ \
-		let len = outputs[0][0].length; \
-		for (let b = 0|0; b < len|0; b++) { \
-			outputs[0][0][b] = Math.random()*0.01; \
+	if( playingAudioProcessor == null )
+	{
+		var bypass = '\
+		class PlayingAudioProcessor extends AudioWorkletProcessor {\
+			static get parameterDescriptors() {\
+			  return [\
+			  	{ name: "gain", defaultValue: 0, },\
+			  	{ name: "lastIntensity", defaultValue: 1, },\
+			  	{ name: "sampleAdvance", defaultValue: 0.5, },\
+				]\
+			};\
+			constructor() {\
+				super();\
+				this.rbuffer = new Uint32Array(8192); \
+				this.rbufferhead = 0|0; \
+				this.rbuffertail = 0|0; \
+				this.sampleplace = 0.0; \
+				this.lastIntensity = 0.0; \
+				this.totalsampcount = 0|0; \
+				this.port.onmessage = (e) => { \
+					var mulcoeff = 500.0 / Math.fround( this.lastIntensity ); \
+					for( var i = 0|0; i < e.data.length|0; i++ ) \
+					{ \
+						let n = (this.rbufferhead + (1|0))%(8192|0); \
+						if( n == this.rbuffertail ) \
+						{ \
+							this.rbuffertail = (this.rbuffertail + (1|0))%(8192|0); \
+							console.log( `Overflow` ); \
+						} \
+						let vv = e.data[i] | 0; \
+						let vi = vv >> 16; \
+						let vq = vv & 0xffff; \
+						if( vi >= 32768 ) vi = vi-65535; \
+						if( vq >= 32768 ) vq = vq-65535; \
+						let power = Math.sqrt( vi * vi + vq * vq ) * mulcoeff; \
+						this.rbuffer[this.rbufferhead] = power; \
+						this.rbufferhead = n; \
+					} \
+				}; \
+			}\
+			\
+			process(inputs, outputs, parameters) {\
+				/*console.log( parameters.gain[0] );*/ \
+				/*console.log( this.ingestData );*/ \
+				this.lastIntensity = parameters.lastIntensity[0]; \
+				let len = outputs[0][0].length; \
+				const sa = Math.fround( parameters.sampleAdvance[0] ); /*float*/ \
+				var s = Math.fround( this.sampleplace );      /*float*/ \
+				var tail = this.rbuffertail | 0;              /* int*/  \
+				var tailnext = this.rbuffertail | 0;          /* int*/  \
+				if( tail == this.rbufferhead ) { console.log( "Underflow " ); return true; }\
+				var tsamp = Math.fround( this.rbuffer[tail] ); \
+				var nsamp = Math.fround( this.rbuffer[tailnext] ); \
+				this.totalsampcount += len|0; \
+				for (let b = 0|0; b < len|0; b++) { \
+					s += sa; \
+					var excess = Math.floor( s ) | 0; \
+					if( excess > 0 ) \
+					{ \
+						s -= excess; \
+						tail = ( tail + (excess|0) ) % (8192|0); \
+						tailnext = ( tail + (1|0) ) % (8192|0); \
+						if( tail == this.rbufferhead ) { console.log( "Underflow" ); break; } \
+						tsamp = Math.fround( this.rbuffer[tail] ); \
+						nsamp = Math.fround( this.rbuffer[tailnext] ); \
+					} \
+					var valv = tsamp * (1.0-s) + nsamp * s; \
+					outputs[0][0][b] = 0.1*valv*parameters.gain[0]; \
+				} \
+				/*console.log( tail + " " + this.rbuffertail + " " + tsamp + " " + nsamp );*/ \
+				this.rbuffertail = tail; \
+				this.sampleplace = s; \
+				return true; \
+			} \
 		} \
-		return true; \
-	} \
-} \
-\
-registerProcessor("playing-audio-processor", PlayingAudioProcessor);';
+		\
+		registerProcessor("playing-audio-processor", PlayingAudioProcessor);';
 
-// The following mechanism does not work on Chrome.
-//	const dataURI = URL.createObjectURL( new Blob([bypass], { type: 'text/javascript', } ) );
+		// The following mechanism does not work on Chrome.
+		//	const dataURI = URL.createObjectURL( new Blob([bypass], { type: 'text/javascript', } ) );
 
 
-	// Extremely tricky trick to side-step local file:// CORS issues.
-	// https://stackoverflow.com/a/67125196/2926815
-	// https://stackoverflow.com/a/72180421/2926815
-	let blob = new Blob([bypass], {type: 'application/javascript'});
-    let reader = new FileReader();
-    await reader.readAsDataURL(blob);
-    let dataURI = await new Promise((res) => {
-        reader.onloadend = function () {
-            res(reader.result);
-        }
-    });
+		// Extremely tricky trick to side-step local file:// CORS issues.
+		// https://stackoverflow.com/a/67125196/2926815
+		// https://stackoverflow.com/a/72180421/2926815
+		let blob = new Blob([bypass], {type: 'application/javascript'});
+		let reader = new FileReader();
+		await reader.readAsDataURL(blob);
+		let dataURI = await new Promise((res) => {
+			reader.onloadend = function () {
+				res(reader.result);
+			}
+		});
 
-	var audioContext = new AudioContext();
+		audioContext = new AudioContext();
 
-    await audioContext.audioWorklet.addModule(dataURI);
+		await audioContext.audioWorklet.addModule(dataURI);
 
-	PlayingAudioProcessor = new AudioWorkletNode(
-		audioContext,
-		"playing-audio-processor"
-	);
-	PlayingAudioProcessor.connect(audioContext.destination);
-	audioContext.resume();
+		playingAudioProcessor = new AudioWorkletNode(
+			audioContext,
+			"playing-audio-processor"
+		);
+		playingAudioProcessor.connect(audioContext.destination);
+		audioContext.resume();
 
-	let testParam = PlayingAudioProcessor.parameters.get("ingestRate");
-	testParam.setValueAtTime(1000, audioContext.currentTime);
+		let gainParam = playingAudioProcessor.parameters.get( "gain" );
+		gainParam.setValueAtTime( 0, audioContext.currentTime );
+	}
 
-	PlayingAudioProcessor.port.postMessage( new ArrayBuffer(0) );
+	let gainParam = playingAudioProcessor.parameters.get("gain");
+	var newVal = 1 - gainParam.value;
+
+	gainParam.setValueAtTime( newVal, audioContext.currentTime);
+	document.getElementById( "ToggleAudioButton" ).value = ( newVal > 0.5 ) ? "Stop Audio" : "Start Audio";
 }
 
 function onLoadWebHidControl()
@@ -147,7 +197,7 @@ function onLoadWebHidControl()
 		navigator.hid.addEventListener("disconnect", (event) => { if( event.device.productName == expectedProductName ) closeDeviceTool(); } );
 	}
 
-    setTimeout( () => { elapsedOK = true; }, 3000 );
+	setTimeout( () => { elapsedOK = true; }, 3000 );
 
 }
 
@@ -220,9 +270,6 @@ function updateWebHidDeviceWithParameters( paramlist )
 		arraySend[i*4+10] = (vv>>24)&0xff;
 	}
 	arraySend[3] = paramlist.length | 0;
-
-	console.log( arraySend );
-
 	sendReport = dev.sendFeatureReport( 0xAC, arraySend ).catch( sendLoopError );
 	if( !sendReport ) sendLoopError( "error creating sendFeatureReport" );
 }
@@ -287,6 +334,7 @@ async function sendLoop()
 					ctx.fillStyle = `rgb( 255 255 255 )`;
 
 					let mulcoeff = 10000.0 / lastIntensity;
+
 					var lot = 1.2;
 					var x = 253+IQHistoryLen;
 					for( var i = (IQHistoryHead+1) & (IQHistoryLen-1); i != IQHistoryHead|0; i = (i + 1) & (IQHistoryLen-1) )
@@ -335,7 +383,7 @@ async function sendLoop()
 					let numq = data[0] & 0xff;
 					let time_total = data[1]>>16;
 					let time_used  = data[1]&0xffff;
-					//console.log( data );
+					let sample_divisor  = data[2]&0xffff;
 					for( var i = 0|0; i < numq; i++ )
 					{
 						IQHistoryArray[IQHistoryHead++] = data[i+3];
@@ -345,6 +393,18 @@ async function sendLoop()
 					lastNumQ = numq;
 					lastTotalTime = time_total;
 					lastTimeUsed = time_used;
+
+					if( audioContext != null && playingAudioProcessor != null )
+					{
+						let lastIntensityParam = playingAudioProcessor.parameters.get("lastIntensity");
+						lastIntensityParam.setValueAtTime( lastIntensity, audioContext.currentTime);
+
+						let sampleAdvance = (144000000.0/sample_divisor) / audioContext.sampleRate;
+						let sampleAdvanceParam = playingAudioProcessor.parameters.get("sampleAdvance");
+						sampleAdvanceParam.setValueAtTime( sampleAdvance, audioContext.currentTime);
+
+						playingAudioProcessor.port.postMessage( new Uint32Array( data.buffer.slice( 3*4, numq*4 + 3*4 ) ) );
+					}
 					goodCount++;
 				}
 				else

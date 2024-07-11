@@ -65,7 +65,7 @@ SOFTWARE.
 
 #define SH1107_128x128
 #define SSD1306_REMAP_I2C
-#define PWM_OUTPUT
+//#define PWM_OUTPUT
 #define ENABLE_OLED
 #define PROFILING_PIN PA0
 
@@ -391,7 +391,7 @@ void DMA1_Channel1_IRQHandler( void )
 					intensity = 1;
 				intensity = (intensity + s/intensity)/2;
 				intensity = (intensity + s/intensity)/2;
-				intensity_average = intensity_average - (intensity_average>>10) + (intensity);
+				intensity_average = intensity_average - (intensity_average>>12) + (intensity>>2);
 
 
 				#ifdef PWM_OUTPUT
@@ -649,7 +649,7 @@ int HandleHidUserGetReportSetup( struct _USBState * ctx, tusb_control_request_t 
 
 		((uint32_t*)scratchpad)[0] = (intensity_average<<8) | samps_to_send;
 		((uint32_t*)scratchpad)[1] = (g_lastper<<16) | g_lastlen;
-		((uint32_t*)scratchpad)[2] = 0; //Reserved.
+		((uint32_t*)scratchpad)[2] = (0<<16) | (((g_pwm_period+1)*g_goertzel_buffer)); //LSW = 144MHz / X
 
 		int i;
 		for( i = 3; i < samps_to_send + 3; i++ )
