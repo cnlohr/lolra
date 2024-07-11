@@ -399,6 +399,7 @@ async function sendLoop()
 						let lastIntensityParam = playingAudioProcessor.parameters.get("lastIntensity");
 						lastIntensityParam.setValueAtTime( lastIntensity, audioContext.currentTime);
 
+						// TODO: Use crystalmhz
 						let sampleAdvance = (144000000.0/sample_divisor) / audioContext.sampleRate;
 						let sampleAdvanceParam = playingAudioProcessor.parameters.get("sampleAdvance");
 						sampleAdvanceParam.setValueAtTime( sampleAdvance, audioContext.currentTime);
