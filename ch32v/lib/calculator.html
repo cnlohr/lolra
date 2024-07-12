@@ -4,20 +4,13 @@
 <LINK rel="shortcut icon" href="data:image/x-icon;," type="image/x-icon"> 
 <META charset="UTF-8">
 <STYLE>
-body {
-  background-color: Canvas;
-  color: CanvasText;
-}
-:root {
-  color-scheme: dark;
-}
+body { background-color: Canvas; color: CanvasText; }
+:root { color-scheme: dark; }
 </STYLE>
 
 <SCRIPT src=webhidcontrol.js></SCRIPT>
 
 <SCRIPT>
-
-
 function DrawSpan( colspan, freq, target, docolor, extrastr = "" )
 {
 	var fdist = Math.abs( freq - target );
@@ -228,8 +221,10 @@ function onLoad()
 
 Live Control:
 <TABLE><TR>
-<TD><INPUT TYPE=SUBMIT onClick="reqConnect()" VALUE="Open Device" ID=connectButton><INPUT TYPE=SUBMIT onClick="toggleAudio()" VALUE="Play Audio" ID="ToggleAudioButton"></TD>
-<TD><DIV ID=STATUS></DIV></TD>
+<TD><INPUT TYPE=SUBMIT onClick="reqConnect()" VALUE="Open Device" ID=connectButton>
+<INPUT TYPE=SUBMIT onClick="toggleAudio()" VALUE="Play Audio" ID="ToggleAudioButton">
+<INPUT TYPE=SUBMIT onClick="toggleAudioModulation()" VALUE="modulation" ID="ToggleAudioModulationButton">
+<DIV ID=STATUS></DIV></TD>
 </TR></TABLE>
 <DIV ID="StatusPerf"></DIV>
 </TD>

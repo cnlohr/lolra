@@ -61,6 +61,27 @@ async function closeDeviceTool()
 var playingAudioProcessor = null;
 var audioContext = null;
 
+var targetModulation = 0;
+var targetGain = 0.0;
+
+function UpdateButtonNames()
+{
+	document.getElementById( "ToggleAudioButton" ).value = ( targetGain > 0.5 ) ? "Stop Audio" : "Start Audio";
+	document.getElementById( "ToggleAudioModulationButton" ).value = ( targetModulation > 0.5 ) ? "FM" : "AM";
+}
+
+async function toggleAudioModulation()
+{
+	if( playingAudioProcessor != null )
+	{
+		var newVal = 1 - targetModulation;
+		let demodmodeParam = playingAudioProcessor.parameters.get("demodmode");
+		demodmodeParam.setValueAtTime( newVal, audioContext.currentTime);
+		targetModulation = newVal;
+	}
+	UpdateButtonNames();
+}
+
 async function toggleAudio()
 {
 	if( playingAudioProcessor == null )
@@ -70,20 +91,26 @@ async function toggleAudio()
 			static get parameterDescriptors() {\
 			  return [\
 			  	{ name: "gain", defaultValue: 0, },\
+			  	{ name: "demodmode", defaultValue: 0, },\
 			  	{ name: "lastIntensity", defaultValue: 1, },\
 			  	{ name: "sampleAdvance", defaultValue: 0.5, },\
 				]\
 			};\
 			constructor() {\
 				super();\
-				this.rbuffer = new Uint32Array(8192); \
+				this.rbuffer = new Float32Array(8192); \
 				this.rbufferhead = 0|0; \
 				this.rbuffertail = 0|0; \
 				this.sampleplace = 0.0; \
 				this.lastIntensity = 0.0; \
 				this.totalsampcount = 0|0; \
+				this.lastDemodMode = 0|0; \
+				this.iirphase = 0.0; /* for FM */\
+				this.lastphase = 0.0; /* for FM */\
+				this.phaseout = 0.0; /* for FM */\
 				this.port.onmessage = (e) => { \
-					var mulcoeff = 500.0 / Math.fround( this.lastIntensity ); \
+					var mulcoeff = 100.0 / Math.fround( this.lastIntensity ); \
+					var demodmode = this.lastDemodMode | 0; \
 					for( var i = 0|0; i < e.data.length|0; i++ ) \
 					{ \
 						let n = (this.rbufferhead + (1|0))%(8192|0); \
@@ -98,7 +125,25 @@ async function toggleAudio()
 						if( vi >= 32768 ) vi = vi-65535; \
 						if( vq >= 32768 ) vq = vq-65535; \
 						let power = Math.sqrt( vi * vi + vq * vq ) * mulcoeff; \
-						this.rbuffer[this.rbufferhead] = power; \
+						let phase = Math.atan2( vi, vq ) * 0.159155078 + 0.5; \
+						if( this.lastDemodMode == 0 ) \
+						{ /* AM */ \
+							this.rbuffer[this.rbufferhead] = power; \
+						} \
+						else if( this.lastDemodMode == 1 ) \
+						{ /* FM */ \
+							var diffphase = phase - this.lastphase; \
+							this.lastphase = phase; \
+							if( diffphase < 0.0 ) diffphase += 1.0; \
+							if( diffphase > 1.0 ) diffphase -= 1.0; \
+							this.iirphase = this.iirphase * 0.999 + diffphase * 0.001; \
+							diffphase -= this.iirphase; \
+							var po = this.phaseout = this.phaseout * 0.993 + diffphase; \
+							console.log( po ); \
+							if( po < 0.0 ) po += 1.0; \
+							if( po > 1.0 ) po -= 1.0; \
+							this.rbuffer[this.rbufferhead] = po; \
+						} \
 						this.rbufferhead = n; \
 					} \
 				}; \
@@ -108,6 +153,7 @@ async function toggleAudio()
 				/*console.log( parameters.gain[0] );*/ \
 				/*console.log( this.ingestData );*/ \
 				this.lastIntensity = parameters.lastIntensity[0]; \
+				this.lastDemodMode = parameters.demodmode[0]; \
 				let len = outputs[0][0].length; \
 				const sa = Math.fround( parameters.sampleAdvance[0] ); /*float*/ \
 				var s = Math.fround( this.sampleplace );      /*float*/ \
@@ -172,11 +218,13 @@ async function toggleAudio()
 		gainParam.setValueAtTime( 0, audioContext.currentTime );
 	}
 
+	var newVal = 1 - targetGain;
+	console.log( "Setting gain to: " + newVal );
 	let gainParam = playingAudioProcessor.parameters.get("gain");
-	var newVal = 1 - gainParam.value;
-
 	gainParam.setValueAtTime( newVal, audioContext.currentTime);
+	targetGain = newVal;
 	document.getElementById( "ToggleAudioButton" ).value = ( newVal > 0.5 ) ? "Stop Audio" : "Start Audio";
+	UpdateButtonNames();
 }
 
 function onLoadWebHidControl()
@@ -185,6 +233,7 @@ function onLoadWebHidControl()
 	liveGraph.addEventListener( "mousedown", graphClick );
 	liveGraph.addEventListener( "mouseup", graphClick );
 
+	UpdateButtonNames();
 	setTimeout( sendLoop, 1 );
 
 	if( !navigator.hid )
@@ -305,7 +354,7 @@ async function sendLoop()
 				xActionSecAvg = xActionSecAvg * 0.9 + xActionSec * 0.1;
 
 				document.getElementById( "StatusPerf" ).innerHTML = 
-					(kBsecAvg).toFixed(2) + " kBytes/s (Split between send and receive)<br>" +
+					(kBsecAvg).toFixed(2) + " kBytes/s<br>" +
 					(xActionSecAvg).toFixed(2)  + "transactions/sec<br>" +
 					"Count: " + goodCount + " / " + badCount;
 				lastTime = thisTime;
@@ -336,8 +385,8 @@ async function sendLoop()
 					let mulcoeff = 10000.0 / lastIntensity;
 
 					var lot = 1.2;
-					var x = 253+IQHistoryLen;
-					for( var i = (IQHistoryHead+1) & (IQHistoryLen-1); i != IQHistoryHead|0; i = (i + 1) & (IQHistoryLen-1) )
+					var x = 253;
+					for( var i = (IQHistoryHead-1) & (IQHistoryLen-1); i != IQHistoryHead|0; i = (i - 1 + IQHistoryLen) & (IQHistoryLen-1) )
 					{
 						let v = IQHistoryArray[i];
 						let real = (v >> 16);
@@ -352,9 +401,12 @@ async function sendLoop()
 						if( imag < 0 ) imag = 0; if( imag > 255 ) imag = 255;
 						ctx.fillRect(x,power+10,2,2);
 						ctx.fillRect(x,phase*140+150,2,2);
-						x--;
-						ctx.globalAlpha = (lot>0)?lot:0;
-						ctx.fillRect(real+50,imag,2,2);
+						x++;
+						if( lot > 0 )
+						{
+							ctx.globalAlpha = lot;
+							ctx.fillRect(real+50,imag,2,2);
+						}
 						ctx.globalAlpha = 1.0;
 						lot -= 0.0015;
 					}
