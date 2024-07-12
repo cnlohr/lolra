@@ -139,13 +139,13 @@ async function toggleAudio()
 							this.iirphase = this.iirphase * 0.999 + diffphase * 0.001; \
 							diffphase -= this.iirphase; \
 							var po = this.phaseout = this.phaseout * 0.993 + diffphase; \
-							console.log( po ); \
 							if( po < 0.0 ) po += 1.0; \
 							if( po > 1.0 ) po -= 1.0; \
 							this.rbuffer[this.rbufferhead] = po; \
 						} \
 						this.rbufferhead = n; \
 					} \
+					console.log( this.iirphase ); \
 				}; \
 			}\
 			\
