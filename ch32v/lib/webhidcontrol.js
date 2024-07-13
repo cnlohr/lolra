@@ -429,11 +429,13 @@ async function sendLoop()
 						else if( targetModulation == 1 )
 						{ /* FM */
 							var diffphase = phase - FMlastphase;
-							this.lastphase = phase;
-							if( diffphase < 0.0 ) diffphase += 1.0;
-							if( diffphase > 1.0 ) diffphase -= 1.0;
+							FMlastphase = phase;
+							if( diffphase - FMiirphase < 0.0 ) diffphase += 1.0;
+							if( diffphase - FMiirphase > 1.0 ) diffphase -= 1.0;
 							FMiirphase = FMiirphase * 0.999 + diffphase * 0.001;
 							diffphase -= FMiirphase;
+							if( diffphase > 0.5 ) diffphase -= 1;
+							if( diffphase <-0.5 ) diffphase += 1;
 							var po = FMphaseout = FMphaseout * 0.993 + diffphase;
 							if( po < 0.0 ) po += 1.0;
 							if( po > 1.0 ) po -= 1.0;
