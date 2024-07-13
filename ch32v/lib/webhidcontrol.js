@@ -5,6 +5,7 @@ let loopAbort = false;
 
 const IQHistoryLen = 4096;
 var IQHistoryArray = new Uint32Array(IQHistoryLen);
+var MPHistoryArray = new Float32Array(IQHistoryLen*2);
 var IQHistoryHead = 0|0;
 var lastIntensity = 1.0;
 var lastNumQ = 0;
@@ -66,7 +67,7 @@ var targetGain = 0.0;
 
 function UpdateButtonNames()
 {
-	document.getElementById( "ToggleAudioButton" ).value = ( targetGain > 0.5 ) ? "Stop Audio" : "Start Audio";
+	document.getElementById( "ToggleAudioButton" ).value = ( targetGain > 0.0 ) ? "Stop Audio" : "Start Audio";
 	document.getElementById( "ToggleAudioModulationButton" ).value = ( targetModulation > 0.5 ) ? "FM" : "AM";
 }
 
@@ -75,8 +76,6 @@ async function toggleAudioModulation()
 	if( playingAudioProcessor != null )
 	{
 		var newVal = 1 - targetModulation;
-		let demodmodeParam = playingAudioProcessor.parameters.get("demodmode");
-		demodmodeParam.setValueAtTime( newVal, audioContext.currentTime);
 		targetModulation = newVal;
 	}
 	UpdateButtonNames();
@@ -91,8 +90,6 @@ async function toggleAudio()
 			static get parameterDescriptors() {\
 			  return [\
 			  	{ name: "gain", defaultValue: 0, },\
-			  	{ name: "demodmode", defaultValue: 0, },\
-			  	{ name: "lastIntensity", defaultValue: 1, },\
 			  	{ name: "sampleAdvance", defaultValue: 0.5, },\
 				]\
 			};\
@@ -102,15 +99,10 @@ async function toggleAudio()
 				this.rbufferhead = 0|0; \
 				this.rbuffertail = 0|0; \
 				this.sampleplace = 0.0; \
-				this.lastIntensity = 0.0; \
+				this.dcoffset = 0.0; \
 				this.totalsampcount = 0|0; \
-				this.lastDemodMode = 0|0; \
-				this.iirphase = 0.0; /* for FM */\
-				this.lastphase = 0.0; /* for FM */\
-				this.phaseout = 0.0; /* for FM */\
+				\
 				this.port.onmessage = (e) => { \
-					var mulcoeff = 100.0 / Math.fround( this.lastIntensity ); \
-					var demodmode = this.lastDemodMode | 0; \
 					for( var i = 0|0; i < e.data.length|0; i++ ) \
 					{ \
 						let n = (this.rbufferhead + (1|0))%(8192|0); \
@@ -119,41 +111,17 @@ async function toggleAudio()
 							this.rbuffertail = (this.rbuffertail + (1|0))%(8192|0); \
 							console.log( `Overflow` ); \
 						} \
-						let vv = e.data[i] | 0; \
-						let vi = vv >> 16; \
-						let vq = vv & 0xffff; \
-						if( vi >= 32768 ) vi = vi-65535; \
-						if( vq >= 32768 ) vq = vq-65535; \
-						let power = Math.sqrt( vi * vi + vq * vq ) * mulcoeff; \
-						let phase = Math.atan2( vi, vq ) * 0.159155078 + 0.5; \
-						if( this.lastDemodMode == 0 ) \
-						{ /* AM */ \
-							this.rbuffer[this.rbufferhead] = power; \
-						} \
-						else if( this.lastDemodMode == 1 ) \
-						{ /* FM */ \
-							var diffphase = phase - this.lastphase; \
-							this.lastphase = phase; \
-							if( diffphase < 0.0 ) diffphase += 1.0; \
-							if( diffphase > 1.0 ) diffphase -= 1.0; \
-							this.iirphase = this.iirphase * 0.999 + diffphase * 0.001; \
-							diffphase -= this.iirphase; \
-							var po = this.phaseout = this.phaseout * 0.993 + diffphase; \
-							if( po < 0.0 ) po += 1.0; \
-							if( po > 1.0 ) po -= 1.0; \
-							this.rbuffer[this.rbufferhead] = po; \
-						} \
+						var vv = e.data[i]; \
+						this.dcoffset = this.dcoffset * 0.995 + vv * 0.005; \
+						this.rbuffer[this.rbufferhead] = vv - this.dcoffset; \
 						this.rbufferhead = n; \
 					} \
-					console.log( this.iirphase ); \
 				}; \
 			}\
 			\
 			process(inputs, outputs, parameters) {\
 				/*console.log( parameters.gain[0] );*/ \
 				/*console.log( this.ingestData );*/ \
-				this.lastIntensity = parameters.lastIntensity[0]; \
-				this.lastDemodMode = parameters.demodmode[0]; \
 				let len = outputs[0][0].length; \
 				const sa = Math.fround( parameters.sampleAdvance[0] ); /*float*/ \
 				var s = Math.fround( this.sampleplace );      /*float*/ \
@@ -176,7 +144,7 @@ async function toggleAudio()
 						nsamp = Math.fround( this.rbuffer[tailnext] ); \
 					} \
 					var valv = tsamp * (1.0-s) + nsamp * s; \
-					outputs[0][0][b] = 0.1*valv*parameters.gain[0]; \
+					outputs[0][0][b] = valv*parameters.gain[0]; \
 				} \
 				/*console.log( tail + " " + this.rbuffertail + " " + tsamp + " " + nsamp );*/ \
 				this.rbuffertail = tail; \
@@ -218,7 +186,7 @@ async function toggleAudio()
 		gainParam.setValueAtTime( 0, audioContext.currentTime );
 	}
 
-	var newVal = 1 - targetGain;
+	var newVal = 0.1 - targetGain;
 	console.log( "Setting gain to: " + newVal );
 	let gainParam = playingAudioProcessor.parameters.get("gain");
 	gainParam.setValueAtTime( newVal, audioContext.currentTime);
@@ -323,6 +291,10 @@ function updateWebHidDeviceWithParameters( paramlist )
 	if( !sendReport ) sendLoopError( "error creating sendFeatureReport" );
 }
 
+FMiirphase = 0.0; /* for FM */
+FMlastphase = 0.0; /* for FM */
+FMphaseout = 0.0; /* for FM */
+
 
 async function sendLoop()
 {
@@ -388,19 +360,20 @@ async function sendLoop()
 					var x = 253;
 					for( var i = (IQHistoryHead-1) & (IQHistoryLen-1); i != IQHistoryHead|0; i = (i - 1 + IQHistoryLen) & (IQHistoryLen-1) )
 					{
+						let power = MPHistoryArray[i*2+0]; //Math.sqrt( real * real + imag * imag ) * mulcoeff;
+						let phase = MPHistoryArray[i*2+1]; //Math.atan2( real, imag ) * 0.159155078*0.5;
+						ctx.fillRect(x,power*120+10,2,2);
+						ctx.fillRect(x,phase*80+110,2,2);
+
 						let v = IQHistoryArray[i];
 						let real = (v >> 16);
 						let imag = (v & 0xffff);
 						if( real > 32767 ) real -= 65536;
 						if( imag > 32767 ) imag -= 65536;
-						let power = Math.sqrt( real * real + imag * imag ) * mulcoeff;
-						let phase = Math.atan2( real, imag ) * 0.159155078*0.5;
 						real = real * mulcoeff + 100;
 						imag = imag * mulcoeff + 100;
 						if( real < 0 ) real = 0; if( real > 255 ) real = 255;
 						if( imag < 0 ) imag = 0; if( imag > 255 ) imag = 255;
-						ctx.fillRect(x,power+10,2,2);
-						ctx.fillRect(x,phase*140+150,2,2);
 						x++;
 						if( lot > 0 )
 						{
@@ -436,10 +409,38 @@ async function sendLoop()
 					let time_total = data[1]>>16;
 					let time_used  = data[1]&0xffff;
 					let sample_divisor  = data[2]&0xffff;
+					let demodbuffer = new Float32Array(numq);
+					let mulcoeff = 100.0 / lastIntensity;
 					for( var i = 0|0; i < numq; i++ )
 					{
-						IQHistoryArray[IQHistoryHead++] = data[i+3];
-						if( IQHistoryHead == IQHistoryLen ) IQHistoryHead = 0;
+						let vv = IQHistoryArray[IQHistoryHead] = data[i+3];
+						let vi = vv >> 16;
+						let vq = vv & 0xffff;
+						if( vi >= 32768 ) vi = vi-65535;
+						if( vq >= 32768 ) vq = vq-65535;
+						let power = Math.sqrt( vi * vi + vq * vq ) * mulcoeff;
+						let phase = Math.atan2( vi, vq ) * 0.159155078 + 0.5;
+						MPHistoryArray[IQHistoryHead*2+0] = power; //Math.sqrt( real * real + imag * imag ) * mulcoeff;
+						MPHistoryArray[IQHistoryHead*2+1] = phase; //Math.atan2( real, imag ) * 0.159155078*0.5;
+						if( targetModulation == 0 )
+						{ /* AM */
+							demodbuffer[i] = power;
+						}
+						else if( targetModulation == 1 )
+						{ /* FM */
+							var diffphase = phase - FMlastphase;
+							this.lastphase = phase;
+							if( diffphase < 0.0 ) diffphase += 1.0;
+							if( diffphase > 1.0 ) diffphase -= 1.0;
+							FMiirphase = FMiirphase * 0.999 + diffphase * 0.001;
+							diffphase -= FMiirphase;
+							var po = FMphaseout = FMphaseout * 0.993 + diffphase;
+							if( po < 0.0 ) po += 1.0;
+							if( po > 1.0 ) po -= 1.0;
+							demodbuffer[i] = po;
+						}
+
+						IQHistoryHead = (IQHistoryHead+1)%IQHistoryLen;
 					}
 					lastIntensity = intensity;
 					lastNumQ = numq;
@@ -448,15 +449,11 @@ async function sendLoop()
 
 					if( audioContext != null && playingAudioProcessor != null )
 					{
-						let lastIntensityParam = playingAudioProcessor.parameters.get("lastIntensity");
-						lastIntensityParam.setValueAtTime( lastIntensity, audioContext.currentTime);
-
 						// TODO: Use crystalmhz
 						let sampleAdvance = (144000000.0/sample_divisor) / audioContext.sampleRate;
 						let sampleAdvanceParam = playingAudioProcessor.parameters.get("sampleAdvance");
 						sampleAdvanceParam.setValueAtTime( sampleAdvance, audioContext.currentTime);
-
-						playingAudioProcessor.port.postMessage( new Uint32Array( data.buffer.slice( 3*4, numq*4 + 3*4 ) ) );
+						playingAudioProcessor.port.postMessage( demodbuffer );
 					}
 					goodCount++;
 				}

@@ -84,6 +84,7 @@ int g_volume_pwm = 127; // 0 - 127 (100%) (but you can go over 100)
 #if 0
 int g_pwm_period = (30-1);
 int g_goertzel_buffer = (752);
+int g_exactcompute = (0);
 int32_t g_goertzel_omega_per_sample = 2485087396; // 0.368351 of whole per step / 27.031915MHz
 int32_t g_goertzel_coefficient = -1453756170;
 int32_t g_goertzel_coefficient_s = 1580594514;
@@ -92,6 +93,7 @@ int32_t g_goertzel_coefficient_s = 1580594514;
 #if 1
 int g_pwm_period = (30-1);
 int g_goertzel_buffer = (180);
+int g_exactcompute = (0);
 int32_t g_goertzel_omega_per_sample = 5509657063; // 0.816667 of whole per step / 0.880000MHz
 int32_t g_goertzel_coefficient = 873460290;
 int32_t g_goertzel_coefficient_s = -1961823932;
@@ -100,6 +102,7 @@ int32_t g_goertzel_coefficient_s = -1961823932;
 #if 0
 int g_pwm_period = (31-1);
 int g_goertzel_buffer = (412);
+int g_exactcompute = (0);
 const int32_t g_goertzel_omega_per_sample = 1670254667; // 0.247573 of whole per step / 1.150016MHz
 const int32_t g_goertzel_coefficient = 32748822;
 const int32_t g_goertzel_coefficient_s = 2147233926;
@@ -108,6 +111,7 @@ const int32_t g_goertzel_coefficient_s = 2147233926;
 #if 0
 int g_pwm_period = (30-1);
 int g_goertzel_buffer = (576);
+int g_exactcompute = (0);
 int32_t g_goertzel_omega_per_sample = 1264972285; // 0.187500 of whole per step / 90.300000MHz
 int32_t g_goertzel_coefficient = 821806413;
 int32_t g_goertzel_coefficient_s = 1984016189;
@@ -116,6 +120,7 @@ int32_t g_goertzel_coefficient_s = 1984016189;
 #if 0
 int g_pwm_period = (30-1);
 int g_goertzel_buffer = (320);
+int g_exactcompute = (0);
 const int32_t g_goertzel_omega_per_sample = 990894956; // 0.146875 of whole per step / 101.505000MHz
 const int32_t g_goertzel_coefficient = 1296126516;
 const int32_t g_goertzel_coefficient_s = 1712233066;
@@ -124,6 +129,7 @@ const int32_t g_goertzel_coefficient_s = 1712233066;
 #if 0
 int g_pwm_period = (30-1);
 int g_goertzel_buffer = (384);
+int g_exactcompute = (0);
 const int32_t g_goertzel_omega_per_sample = 4251712402; // 0.630208 of whole per step / 27.025000MHz
 const int32_t g_goertzel_coefficient = -1468003291;
 const int32_t g_goertzel_coefficient_s = -1567371161;
@@ -132,6 +138,7 @@ const int32_t g_goertzel_coefficient_s = -1567371161;
 #if 0
 int g_pwm_period = (30-1);
 int g_goertzel_buffer = (336);
+int g_exactcompute = (0);
 const int32_t g_goertzel_omega_per_sample = 1827182189; // 0.270833 of whole per step / 89.900000MHz
 const int32_t g_goertzel_coefficient = -280302863;
 const int32_t g_goertzel_coefficient_s = 2129111628;
@@ -273,6 +280,7 @@ int32_t g_goertzelp_store, g_goertzelp2_store;
 int32_t g_laststart = 0;
 int32_t g_lastper;
 int32_t g_lastlen;
+uint32_t g_accumulate_over_window;
 
 void DMA1_Channel1_IRQHandler( void ) __attribute__((interrupt));
 void DMA1_Channel1_IRQHandler( void ) 
@@ -290,6 +298,7 @@ void DMA1_Channel1_IRQHandler( void )
 	int32_t goertzelp2 = g_goertzelp2;
 	int32_t goertzelp = g_goertzelp;
 	int32_t goertzel = g_goertzel;
+	int32_t accumulate_over_window = g_accumulate_over_window;
 
 	uint32_t goertzel_samples = g_goertzel_samples;
 	// Backup flags.
@@ -309,7 +318,7 @@ void DMA1_Channel1_IRQHandler( void )
 
 		#define INFADC 2
 		// Add a tiny bias to the ADC to help keep goertz in range.
-		const int adc_offset = (-2048) << INFADC;
+		static int adc_offset = (-2048) << INFADC;
 
 		while( adc_tail != adc_buffer_end )
 		{
@@ -325,13 +334,14 @@ void DMA1_Channel1_IRQHandler( void )
 				lhu     %[adcin]," XSTR(idx) "(%[adc_tail])	\n\
 				slli    %[adcin],%[adcin],%[iadc]			/*INFADC = 2*/ \n\
 				add		%[adcin],%[adcin],%[adcoffset]		/*adcin += adcoffset*/ \n\
+				add     %[accumulate_over_window], %[adcin], %[accumulate_over_window]\n \
 				addi    %[goertzelp2],%[goertzelp],0		/*goertzelp2 = goertzelp*/ \n\
 				addi    %[goertzelp], %[goertzel],0			/*goertzelp = goertzel*/ \n\
 				slli    %[goertzel], %[goertzelp], 2		/*prescaling up goertzelp*/\n\
 				mulh    %[goertzel], %[goertzel_coefficient], %[goertzel]\n\
 				sub     %[adcin],%[adcin],%[goertzelp2]		/*adcin -= goertzelp2*/ \n\
 				add     %[goertzel], %[goertzel], %[adcin]	/* mulh = signed * signed + adc */ \n"\
-			: [goertzel]"+r"(goertzel), [goertzelp]"+r"(goertzelp), [goertzelp2]"+r"(goertzelp2), [adcin]"+r"(t) : \
+			: [goertzel]"+r"(goertzel), [goertzelp]"+r"(goertzelp), [goertzelp2]"+r"(goertzelp2), [adcin]"+r"(t), [accumulate_over_window]"+r"(accumulate_over_window) : \
 				[adc_tail]"r"(adc_tail), [adcoffset]"r"(adc_offset), [goertzel_coefficient]"r"(goertzel_coefficient), [iadc]"i"(INFADC) );
 
 			GOERTZELLOOP(0);
@@ -369,7 +379,7 @@ void DMA1_Channel1_IRQHandler( void )
 	funDigitalWrite( PROFILING_PIN, 0 );
 #endif
 
-				g_goertzelp_store = goertzel - (g_goertzel_omega_per_sample>>(29-16));
+				g_goertzelp_store = goertzel;
 				g_goertzelp2_store = goertzelp;
 
 				int32_t zp = g_goertzelp_store;
@@ -391,20 +401,24 @@ void DMA1_Channel1_IRQHandler( void )
 					intensity = 1;
 				intensity = (intensity + s/intensity)/2;
 				intensity = (intensity + s/intensity)/2;
-				intensity_average = intensity_average - (intensity_average>>12) + (intensity>>2);
-
+				intensity_average = intensity_average - (intensity_average>>12) + (intensity>>6);
 
 				#ifdef PWM_OUTPUT
-				intensity = intensity * g_volume_pwm * g_pwm_period / (intensity_average>>(10-8));
+				intensity = intensity * g_volume_pwm * g_pwm_period / (intensity_average>>(10-12));
 				if( intensity >= g_pwm_period-1 ) intensity = g_pwm_period-2;
 				if( intensity < 1 ) intensity = 1;
 				TIM1->CH2CVR = intensity;  // Actual duty cycle (Off to begin with)
 				#endif
 
 				g_goertzel_outs++;
-				goertzel = g_goertzel_omega_per_sample>>(29-16);
+				goertzel = 0;
 				goertzelp = 0;
 				goertzel_samples = 0;
+
+				// Try to improve bias.
+				adc_offset -= accumulate_over_window / g_goertzel_buffer;
+				accumulate_over_window = 0;
+
 #ifdef PROFILING_PIN
 	funDigitalWrite( PROFILING_PIN, 1 );
 #endif
@@ -419,7 +433,8 @@ void DMA1_Channel1_IRQHandler( void )
 	g_goertzelp = goertzelp;
 	g_goertzel = goertzel;
 	g_goertzel_samples = goertzel_samples;
- 
+	g_accumulate_over_window = accumulate_over_window;
+
 #ifdef PROFILING_PIN
 	funDigitalWrite( PROFILING_PIN, 0 ); // For profiling
 #endif
@@ -467,8 +482,8 @@ void InnerLoop()
 			int16_t rr = combiq & 0xffff;
 			int16_t ri = combiq >> 16;
 
-			rr = rr * 512 / (intensity_average>>4);
-			ri = ri * 512 / (intensity_average>>4);
+			rr = rr * 512 / (intensity_average);
+			ri = ri * 512 / (intensity_average);
 
 			rr += 64;
 			ri += 64;
@@ -647,7 +662,7 @@ int HandleHidUserGetReportSetup( struct _USBState * ctx, tusb_control_request_t 
 		int samps_to_send = (qibaselogs_head - last_baselog + LOG_GOERTZEL_LIST * 2 - 1) & (LOG_GOERTZEL_LIST-1);
 		if( samps_to_send > 120 ) samps_to_send = 120;
 
-		((uint32_t*)scratchpad)[0] = (intensity_average<<8) | samps_to_send;
+		((uint32_t*)scratchpad)[0] = (intensity_average<<12) | samps_to_send;
 		((uint32_t*)scratchpad)[1] = (g_lastper<<16) | g_lastlen;
 		((uint32_t*)scratchpad)[2] = (0<<16) | (((g_pwm_period+1)*g_goertzel_buffer)); //LSW = 144MHz / X
 
@@ -695,6 +710,7 @@ void HandleHidUserReportOutComplete( struct _USBState * ctx )
 		if( numconfigs > 2) g_goertzel_omega_per_sample = configs[4]; // 0.816667 of whole per step / 0.880000MHz
 		if( numconfigs > 3) g_goertzel_coefficient = configs[5];
 		if( numconfigs > 4) g_goertzel_coefficient_s = configs[6];
+		if( numconfigs > 5) g_exactcompute = configs[7];
 
 		// Need to reset so we don't blast by.
 		g_goertzel_samples = 0;
