@@ -81,6 +81,7 @@ volatile uint16_t adc_buffer[ADC_BUFFSIZE];
 void SetupADC()
 {
 	// XXX TODO -look into PGA
+	// XXX TODO - look into BUFEN and TKITUNE
 	// XXX TODO - Look into tag-teaming the ADCs
 
 	// PDA is analog input chl 7

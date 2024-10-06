@@ -193,7 +193,10 @@ void SetupADC()
 	while(ADC1->CTLR2 & ADC_CAL);
 
 	// ADC_SCAN: Allow scanning.
-	ADC1->CTLR1 = ADC_Pga_64 | ADC_SCAN;
+	ADC1->CTLR1 = 
+		//ADC_SCAN;
+		ADC_Pga_16 | ADC_SCAN;
+		//ADC_Pga_64 | ADC_SCAN;
 
 
 	// Turn on DMA
