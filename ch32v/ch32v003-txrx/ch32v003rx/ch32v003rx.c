@@ -55,8 +55,16 @@ SOFTWARE.
 
 #define LEDPIN PD6
 
+#define USE_TIMER
+
 uint32_t dmadata[DMA_SIZE/2] __attribute__((aligned(64)));
-int32_t lastintenR, lastintenI;
+
+
+#define IQDLEN 32
+int32_t lastintenR[IQDLEN], lastintenI[IQDLEN];
+uint32_t intenhead;
+uint32_t intentail;
+
 uint32_t wordouts;
 
 void DMA1_Channel1_IRQHandler( void ) __attribute__((interrupt));
@@ -97,15 +105,18 @@ void DMA1_Channel1_IRQHandler( void )
 		{
 			int32_t vA = *(here++);
 			int32_t vB = *(here++);
-			thisintenR += ((int16_t)vA) - (vB >> 16);
-			thisintenI += ((int16_t)vB) - (vA >> 16);
+			thisintenR += (vA&0x3ff) - (vB >> 16);
+			thisintenI += (vB&0x3ff) - (vA >> 16);
 		} while( here != stopat );
 
 
 		if( here == end )
 		{
-			lastintenR = thisintenR; // Fixup (because when we were subtracting, it should be -1)
-			lastintenI = thisintenI; // Fixup (because when we were subtracting, it should be -1)
+			lastintenR[intenhead] = thisintenR; // Fixup (because when we were subtracting, it should be -1)
+			lastintenI[intenhead] = thisintenI; // Fixup (because when we were subtracting, it should be -1)
+
+			intenhead = (intenhead+1) & (IQDLEN-1);
+
 			thisintenR = 0;
 			thisintenI = 0;
 			here = head;
@@ -125,6 +136,10 @@ int main()
 
 	Delay_Ms( 100 );
 
+	funPinMode( ADC_PIN, GPIO_CFGLR_IN_ANALOG );
+
+	EXTEND->CTR = 1<<10; // LDO trim
+
 	funGpioInitAll();
 
 	RCC->APB1PCENR |= RCC_APB1Periph_TIM2;
@@ -140,7 +155,11 @@ int main()
 	
 	// set sampling time for chl 7, 4, 3, 2
 	// 0:7 => 3/9/15/30/43/57/73/241 cycles
+#ifdef USE_TIMER
 	ADC1->SAMPTR2 = (0<<(3*ADCNO));
+#else
+	ADC1->SAMPTR2 = (3<<(3*ADCNO));
+#endif
 
 	// turn on ADC
 	ADC1->CTLR2 = ADC_ADON;
@@ -174,24 +193,22 @@ int main()
 	NVIC_EnableIRQ( DMA1_Channel1_IRQn );
 	DMA1_Channel1->CFGR |= DMA_CFGR1_EN; // Turn on DMA channel 1
 
-	ADC1->CTLR1 |= ADC_SCAN; 	// enable scanning
+	ADC1->CTLR1 = ADC_SCAN; 	// enable scanning
 	// Enable continuous conversion and DMA, selected by TIM2CC1
+#ifdef USE_TIMER
 	ADC1->CTLR2 = ADC_ADON | ADC_DMA | ADC_EXTSEL_2 | ADC_EXTTRIG;
-
-	// start conversion
-	ADC1->CTLR2 |= ADC_SWSTART;
-
-	// PD4 = T2C1
-	funPinMode( LEDPIN, GPIO_CFGLR_OUT_50Mhz_PP );
-	funPinMode( PD4, GPIO_CFGLR_OUT_50Mhz_AF_PP );
-	funPinMode( ADC_PIN, GPIO_CFGLR_IN_ANALOG );
+#else
+	ADC1->CTLR2 = ADC_ADON | ADC_DMA | ADC_EXTSEL | ADC_SWSTART | ADC_CONT;
+#endif
 
 	// Reset TIM2 to init all regs
 	RCC->APB1PRSTR |= RCC_APB1Periph_TIM2;
 	RCC->APB1PRSTR &= ~RCC_APB1Periph_TIM2;
 
+#ifdef USE_TIMER
+
 	TIM2->PSC = 0x0000; // Prescalar
-	TIM2->ATRLR = 47; // TIM2 max before reset.
+	TIM2->ATRLR = 49; // TIM2 max before reset. 48 = Period of 49 cycles.
 	TIM2->CHCTLR1 = TIM_OC1M_2 | TIM_OC1M_1 | TIM_OC1PE;
 	TIM2->CTLR1 = TIM_ARPE;
 	TIM2->CCER = TIM_CC1E | TIM_CC1P | TIM_CC1NP;
@@ -201,8 +218,33 @@ int main()
 	TIM2->CTLR1 |= TIM_CEN;
 	TIM2->CH1CVR = 1;
 
+#endif
+
+	// PD4 = T2C1
+	funPinMode( LEDPIN, GPIO_CFGLR_OUT_50Mhz_PP );
+	//funPinMode( PD4, GPIO_CFGLR_OUT_50Mhz_AF_PP );
+
 	while(1)
 	{
-		printf( "%5d %5d %6d\n", (int)lastintenR, (int)lastintenI, (int)wordouts );
+//		printf( "%5d %5d %d %d %d %d\n", (int)lastintenR[intenhead], (int)lastintenI[intenhead], dmadata[0]&0xfff, dmadata[0]>>16, dmadata[1]&0xfff, dmadata[1]>>16 );
+
+		int i;
+		int32_t lR[8], lI[8];
+		int head = (intenhead - 8) & (IQDLEN-1);
+		for( i = 0; i < 8; i++ )
+		{
+			lR[i] = lastintenR[head];
+			lI[i] = lastintenI[head];
+			head = (head+1)&(IQDLEN-1);
+		}
+
+		for( i = 0; i < 8; i++ )
+		{
+			printf( "%6d%6d\n", lR[i], lI[i] );
+		}
+
+		printf( "%08x %d\n", dmadata[0], wordouts );
+		Delay_Ms( 1000 );
+
 	}
 }
