@@ -66,7 +66,7 @@ int main()
 	RCC->APB1PRSTR &= ~RCC_APB1Periph_TIM2;
 
 	TIM2->PSC = 0x0000; // Prescalar
-	TIM2->ATRLR = 1; // Max
+	TIM2->ATRLR = 3; // Max
 	TIM2->CHCTLR1 = TIM_OC1M_2 | TIM_OC1M_1 | TIM_OC1PE;
 	TIM2->CTLR1 = TIM_ARPE;
 	TIM2->CCER = TIM_CC1E | TIM_CC1P | TIM_CC1NP;
@@ -74,15 +74,18 @@ int main()
 
 	// Enable TIM2
 	TIM2->CTLR1 |= TIM_CEN;
-	TIM2->CH1CVR = 1;
+	TIM2->CH1CVR = 2;
+
+	printf( "Going\n");
 
 	while(1)
-	{
+	;
+/*	{
 		TIM2->CCER = TIM_CC1E | TIM_CC1P | TIM_CC1NP;
 		funDigitalWrite( LEDPIN, 1 );
-		Delay_Ms( 250 );
+		Delay_Ms( 1000 );
 		TIM2->CCER = TIM_CC1E | TIM_CC1P;
 		funDigitalWrite( LEDPIN, 0 );
-		Delay_Ms( 250 );
-	}
+		Delay_Ms( 1000 );
+	}*/
 }
