@@ -60,6 +60,8 @@ SOFTWARE.
 uint32_t dmadata[DMA_SIZE/2] __attribute__((aligned(64)));
 
 
+uint32_t ercnt = 0;
+
 #define IQDLEN 32
 int32_t lastintenR[IQDLEN], lastintenI[IQDLEN];
 uint32_t intenhead;
@@ -79,6 +81,7 @@ void DMA1_Channel1_IRQHandler( void )
 	static uint32_t * here = dmadata;
 	static uint32_t thisintenR;
 	static uint32_t thisintenI;
+	static uint32_t rcnt;
 
 	// We have a pointer to the next data we want to analyize.
 	// We have a pointer to where the tail of the new data is.
@@ -91,22 +94,21 @@ void DMA1_Channel1_IRQHandler( void )
 	// two.  And we either reset the pointer to the beginning of
 	// the array, OR, we stop because we ran out of data.
 
+	uint32_t cnt = DMA1_Channel1->CNTR;
+	if( cnt == 0 ) cnt = 1;
+	uint32_t tail_offset = DMA_SIZE - cnt;
+	uint32_t * tail = dmadata + tail_offset/2; // Tuncate down to quads if a pair has not been fully written.
+	uint32_t * stopat = (here < tail) ? tail : end;
+
 	do
 	{
-		uint32_t cnt = DMA1_Channel1->CNTR;
-		if( cnt == 0 ) cnt = 1;
-		uint32_t tail_offset = DMA_SIZE - cnt;
-		uint32_t * tail = dmadata + tail_offset/2; // Tuncate down to quads if a pair has not been fully written.
-		uint32_t * stopat = (here < tail) ? tail : end;
-
-		if( here == tail ) break;
-
 		do
 		{
 			int32_t vA = *(here++);
 			int32_t vB = *(here++);
-			thisintenR += (vA&0x3ff) - (vB >> 16);
-			thisintenI += (vB&0x3ff) - (vA >> 16);
+			thisintenR += (vA&0xfff) - (vB&0xfff);
+			thisintenI += (vA >> 16) - (vB >> 16);
+rcnt++;
 		} while( here != stopat );
 
 
@@ -120,6 +122,8 @@ void DMA1_Channel1_IRQHandler( void )
 			thisintenR = 0;
 			thisintenI = 0;
 			here = head;
+ercnt = rcnt;
+rcnt = 0;
 			wordouts++;
 		}
 
@@ -135,8 +139,6 @@ int main()
 	SystemInit();
 
 	Delay_Ms( 100 );
-
-	funPinMode( ADC_PIN, GPIO_CFGLR_IN_ANALOG );
 
 	EXTEND->CTR = 1<<10; // LDO trim
 
@@ -156,7 +158,7 @@ int main()
 	// set sampling time for chl 7, 4, 3, 2
 	// 0:7 => 3/9/15/30/43/57/73/241 cycles
 #ifdef USE_TIMER
-	ADC1->SAMPTR2 = (0<<(3*ADCNO));
+	ADC1->SAMPTR2 = (1<<(3*ADCNO));
 #else
 	ADC1->SAMPTR2 = (3<<(3*ADCNO));
 #endif
@@ -208,7 +210,7 @@ int main()
 #ifdef USE_TIMER
 
 	TIM2->PSC = 0x0000; // Prescalar
-	TIM2->ATRLR = 49; // TIM2 max before reset. 48 = Period of 49 cycles.
+	TIM2->ATRLR = 46; // TIM2 max before reset. 48 = Period of 49 cycles.
 	TIM2->CHCTLR1 = TIM_OC1M_2 | TIM_OC1M_1 | TIM_OC1PE;
 	TIM2->CTLR1 = TIM_ARPE;
 	TIM2->CCER = TIM_CC1E | TIM_CC1P | TIM_CC1NP;
@@ -224,9 +226,14 @@ int main()
 	funPinMode( LEDPIN, GPIO_CFGLR_OUT_50Mhz_PP );
 	//funPinMode( PD4, GPIO_CFGLR_OUT_50Mhz_AF_PP );
 
+	funPinMode( ADC_PIN, 
+		//GPIO_CFGLR_IN_PUPD
+		GPIO_CFGLR_IN_ANALOG
+		);
+
 	while(1)
 	{
-//		printf( "%5d %5d %d %d %d %d\n", (int)lastintenR[intenhead], (int)lastintenI[intenhead], dmadata[0]&0xfff, dmadata[0]>>16, dmadata[1]&0xfff, dmadata[1]>>16 );
+		printf( "%5d %5d %ld %ld %ld %ld\n", (int)lastintenR[intenhead], (int)lastintenI[intenhead], dmadata[0]&0xfff, dmadata[0]>>16, dmadata[1]&0xfff, dmadata[1]>>16 );
 
 		int i;
 		int32_t lR[8], lI[8];
@@ -240,10 +247,10 @@ int main()
 
 		for( i = 0; i < 8; i++ )
 		{
-			printf( "%6d%6d\n", lR[i], lI[i] );
+			printf( "%6ld%6ld\n", lR[i], lI[i] );
 		}
 
-		printf( "%08x %d\n", dmadata[0], wordouts );
+		printf( "%08lx %ld ** %d\n", dmadata[0], wordouts, ercnt );
 		Delay_Ms( 1000 );
 
 	}
