@@ -68,7 +68,7 @@ int main()
 	RCC->APB1PRSTR &= ~RCC_APB1Periph_TIM2;
 
 	TIM2->PSC = 0x0000; // Prescalar
-	TIM2->ATRLR = 4; // Max
+	TIM2->ATRLR = 4; // loop = fclk / (atrlr+1)
 	TIM2->CHCTLR1 = TIM_OC1M_2 | TIM_OC1M_1 | TIM_OC1PE | TIM_OC1FE;
 	TIM2->CTLR1 = TIM_ARPE;
 	TIM2->CCER = TIM_CC1E | TIM_CC1P | TIM_CC1NE;
