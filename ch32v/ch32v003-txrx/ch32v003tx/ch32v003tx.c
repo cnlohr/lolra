@@ -67,25 +67,26 @@ int main()
 
 	TIM2->PSC = 0x0000; // Prescalar
 	TIM2->ATRLR = 3; // Max
-	TIM2->CHCTLR1 = TIM_OC1M_2 | TIM_OC1M_1 | TIM_OC1PE;
+	TIM2->CHCTLR1 = TIM_OC1M_2 | TIM_OC1M_1 | TIM_OC1PE | TIM_OC1FE;
 	TIM2->CTLR1 = TIM_ARPE;
 	TIM2->CCER = TIM_CC1E | TIM_CC1P | TIM_CC1NP;
 	TIM2->SWEVGR = TIM_UG;
 
 	// Enable TIM2
 	TIM2->CTLR1 |= TIM_CEN;
-	TIM2->CH1CVR = 2;
+	TIM2->CH1CVR = TIM2->ATRLR/2;
 
-	printf( "Going\n");
+	while(1);
 
 	while(1)
-	;
-/*	{
-		TIM2->CCER = TIM_CC1E | TIM_CC1P | TIM_CC1NP;
-		funDigitalWrite( LEDPIN, 1 );
-		Delay_Ms( 1000 );
+	{
+		TIM2->CH1CVR = 2;
 		TIM2->CCER = TIM_CC1E | TIM_CC1P;
+		funDigitalWrite( LEDPIN, 1 );
+		Delay_Us( 1500 );
+		TIM2->CCER = TIM_CC1E;
+		TIM2->CH1CVR = 2;
 		funDigitalWrite( LEDPIN, 0 );
-		Delay_Ms( 1000 );
-	}*/
+		Delay_Us( 1500 );
+	}
 }
