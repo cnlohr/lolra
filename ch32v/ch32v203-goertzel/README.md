@@ -27,3 +27,6 @@ TODO: TODO: Test HTML values.
 
 TODO: TODO: g_goertzel_omega_per_sample lokos WRONG.
 
+
+Extra notes:
+ .87996033 = 880 AM, why?

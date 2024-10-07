@@ -22,8 +22,30 @@ function DrawSpan( rowspan, colspan, freq, target, docolor, extrastr = "" )
 	return ret;
 }
 
+var lastGn;
+var lastGmhz;
+var lastGfr;
+var lastGbrf;
+var lastGexact;
+
 function Goertz( n, mhz, fr, brf, exact_compute )
 {
+	lastGn = n;
+	lastGmhz = mhz;
+	lastGfr = fr;
+	lastGbrf = brf;
+	lastGexact = exact_compute;
+	SendGoertz();
+}
+
+function SendGoertz()
+{
+	var n = lastGn;
+	var mhz = lastGmhz;
+	var fr = lastGfr;
+	var brf = lastGbrf;
+	var exact_compute = lastGexact;
+
 	let tau = 3.1415926535*2.0;
 	let omega = fr * tau;
 	var textarea = document.getElementById("goertzeloutput");
@@ -64,7 +86,76 @@ function Goertz( n, mhz, fr, brf, exact_compute )
 		exact_compute|0,
 		g_goertzel_advance_r|0,
 		g_goertzel_advance_i|0,
+		document.getElementById( "toggle_adc_buffer").checked ? 1 : 0,
 		 ] );
+
+	// Update toggle control
+	let target = Number(document.getElementById("targetmhz").value );
+	var tz = (target * 10000000.0);
+	for( var i = 0|0; i < 10; i++ )
+	{
+		var tc = (tz / 1000000000.0) % 10;
+		document.getElementById( "mhzm" + i ).value = tc|0;
+		tz *= 10;
+	}
+}
+
+function toggleBuffer( ths )
+{
+	SendGoertz();
+}
+
+function mhzm( event, ths )
+{
+	event.preventDefault();
+	let dy = event.deltaY > 0 ? -1 : 1;
+	var thss = Number(ths.id.substr(4));
+
+	var hz = 0; // actually tents of hertz
+	for( var i = 0|0; i < 10; i++ )
+	{
+		var dig = Number(document.getElementById( "mhzm" + i ).value);
+		hz += Math.pow( 10, 9-i ) * dig;
+	}
+
+	hz += dy * Math.pow( 10, 9-thss );
+
+	lastGmhz = hz/10000000.0;
+	document.getElementById("targetmhz").value = lastGmhz;
+
+
+	let xtal = Number(document.getElementById("crystalmhz").value );
+	let target = Number(document.getElementById("targetmhz").value );
+	let quadrature = document.getElementById("QUADRATURE").checked;
+	let goertzels = document.getElementById("GOERTZELS").checked;
+	let goertzel2 = document.getElementById("GOERTZEL2").checked;
+	let quanta = Math.round(Number(document.getElementById("quanta").value));
+	let quantasearch = Math.round(Number(document.getElementById("quantasearch").value));
+
+	let n = lastGn;
+	let freq = ( xtal / n );
+	let goertzelpoint = 0;
+	let goertzelpointinv = 0;
+	let tgoertzelp = 0;
+	let tgoertzelpi = 0;
+	let quantaA = 0;
+	let quantaINV = 0;
+
+	let h = 1;
+
+	let tquanta = (quanta&0xffffc);
+	let base = freq * h;
+	let next = freq * (h+1);
+
+
+	let tgoertzelpoint = tquanta;
+	tgoertzelpoint = ( target - base ) / ( next - base );
+	tgoertzelpoint = ((tgoertzelpoint%1)+1)%1;
+
+	quantaA = tquanta;
+	tgoertzelp = h;
+	Goertz( n, freq * (h+tgoertzelpoint), (tgoertzelpoint), quantaA , 1);
+	return false;
 }
 
 function computeTable()
@@ -214,8 +305,23 @@ function computeTable()
 	}
 	else if( goertzel2 )
 	{
-		contents += "</TABLE><TEXTAREA ROWS=6 COLS=120 ID=goertzeloutput></TEXTAREA><BR>";
-		contents += "<TABLE BORDER=1>";
+		contents += "</TABLE>";
+		contents += "<TABLE><TR><TD><TEXTAREA ROWS=6 COLS=120 ID=goertzeloutput></TEXTAREA></TD><TD><DIV>";
+
+		// Add widget to control various things, realtime.
+		contents += "<input type=checkbox ID=toggle_adc_buffer onchange='toggleBuffer(this)'><label for=toggle_buffer>ADC Buffer Enable</label><BR>Scroll Wheel Control:<BR>";
+		contents += "<input id=mhzm0 onwheel='mhzm(event, this)' size=1>";
+		contents += "<input id=mhzm1 onwheel='mhzm(event, this)' size=1>";
+		contents += "<input id=mhzm2 onwheel='mhzm(event, this)' size=1>.";
+		contents += "<input id=mhzm3 onwheel='mhzm(event, this)' size=1>";
+		contents += "<input id=mhzm4 onwheel='mhzm(event, this)' size=1>";
+		contents += "<input id=mhzm5 onwheel='mhzm(event, this)' size=1>,";
+		contents += "<input id=mhzm6 onwheel='mhzm(event, this)' size=1>";
+		contents += "<input id=mhzm7 onwheel='mhzm(event, this)' size=1>";
+		contents += "<input id=mhzm8 onwheel='mhzm(event, this)' size=1>,";
+		contents += "<input id=mhzm9 onwheel='mhzm(event, this)' size=1>";
+		contents += "</DIV></TD></TR></TABLE><BR>";
+		contents += "v Click in this row; <TABLE BORDER=1>";
 		contents += '<TR><TH>d\\h</div></TH>';
 		for( let h = 0|min_harmonics; h <= max_harmonics+1; h++ )
 		{

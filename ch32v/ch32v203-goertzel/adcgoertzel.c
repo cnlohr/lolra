@@ -201,7 +201,8 @@ void SetupADC()
 	// ADC_SCAN: Allow scanning.
 	ADC1->CTLR1 = 
 		//ADC_SCAN;
-		ADC_Pga_16 | ADC_SCAN;
+		ADC_SCAN | ADC_BUFEN ;
+		//ADC_Pga_16 | ADC_SCAN | ADC_BUFEN ;
 		//ADC_Pga_64 | ADC_SCAN;
 
 
@@ -753,6 +754,23 @@ void HandleHidUserReportOutComplete( struct _USBState * ctx )
 		if( numconfigs > 5) g_exactcompute = configs[7];
 		if( numconfigs > 6) g_goertzel_advance_r = configs[8];
 		if( numconfigs > 7) g_goertzel_advance_i = configs[9];
+		if( numconfigs > 8) 
+		{
+			int adc_buffer = configs[10];
+			if( adc_buffer )
+			{
+				// Consider using PGA.
+				//ADC_Pga_16 | ADC_SCAN | ADC_BUFEN ;
+				//ADC_Pga_64 | ADC_SCAN;
+				ADC1->CTLR1 = 
+					ADC_SCAN | ADC_BUFEN;
+			}
+			else
+			{
+				ADC1->CTLR1 = 
+					ADC_SCAN;
+			}
+		}
 
 		// Need to reset so we don't blast by.
 		g_goertzel_samples = 0;
