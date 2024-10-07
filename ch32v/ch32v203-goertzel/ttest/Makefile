@@ -1,4 +1,10 @@
-all : test floattest
+all : test floattest phasor_rotation_test
+
+phasor_rotation_testt : phasor_rotation_test.c
+	gcc -o $@ $^ -lm -g
+
+phasor_rotation_test : phasor_rotation_testt
+	./phasor_rotation_testt
 
 floattest : floattestt
 	./floattestt

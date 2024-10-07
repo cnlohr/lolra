@@ -84,10 +84,10 @@ int main()
 		TIM2->CH1CVR = 2;
 		TIM2->CCER = TIM_CC1E | TIM_CC1P;
 		funDigitalWrite( LEDPIN, 1 );
-		Delay_Us( 2000 );
+		Delay_Us( 20000 );
 		TIM2->CCER = TIM_CC1E;
 		TIM2->CH1CVR = 2;
 		funDigitalWrite( LEDPIN, 0 );
-		Delay_Us( 2000 );
+		Delay_Us( 20000 );
 	}
 }

@@ -81,6 +81,12 @@ volatile uint16_t adc_buffer[ADC_BUFFSIZE];
 
 int g_volume_pwm = 127; // 0 - 127 (100%) (but you can go over 100)
 
+int32_t g_goertzel_phasor_r = 32768;
+int32_t g_goertzel_phasor_i = 0;
+
+int32_t g_goertzel_advance_r = 32768;
+int32_t g_goertzel_advance_i = 0;
+
 #if 0
 int g_pwm_period = (30-1);
 int g_goertzel_buffer = (752);
@@ -390,6 +396,36 @@ void DMA1_Channel1_IRQHandler( void )
 				int32_t rr = (((int64_t)(g_goertzel_coefficient  ) * (int64_t)zp<<1)>>32) - (zp2);
 				int32_t ri = (((int64_t)(g_goertzel_coefficient_s) * (int64_t)zp<<1)>>32);
 
+				// Advanced the current goertzel advance 
+				// phasor = phasor * advance;
+				//  real = real * real - imag * imag;
+				//  imag = real * imag + real * imag;
+				// Sometimes you would bias the output here so that when truncating down you don't perpetually decay.
+				// But experimentally, it didn't make a difference.
+				int32_t temp = (g_goertzel_phasor_r * g_goertzel_advance_i + g_goertzel_phasor_i * g_goertzel_advance_r) >> 15;
+				g_goertzel_phasor_r = (g_goertzel_phasor_r * g_goertzel_advance_r - g_goertzel_phasor_i * g_goertzel_advance_i) >> 15;
+				g_goertzel_phasor_i = temp;
+
+				// Fixup phasor over time to prevent it from dacaying.
+				#define ABS(x) (((x)<0)?-(x):(x))
+				int s_phasor = g_goertzel_phasor_r * g_goertzel_phasor_r + g_goertzel_phasor_i * g_goertzel_phasor_i;
+				int intensity_phasor = (ABS(g_goertzel_phasor_r) + ABS(g_goertzel_phasor_i)) * 26100 / 32768 + 1; // Found experimentally (Also try to avoid divide-by-zero.
+				intensity_phasor = (intensity_phasor + s_phasor/intensity_phasor)/2;
+				intensity_phasor = (intensity_phasor + s_phasor/intensity_phasor)/2;
+				if( intensity_phasor < 32760 )
+				{
+					// It is decaying, this is equivelent to f = f * 1.000244141
+					g_goertzel_phasor_r += g_goertzel_phasor_r >> 12;
+					g_goertzel_phasor_i += g_goertzel_phasor_i >> 12;
+				}
+
+				// Now, rotate rr, ri by that phasor.
+				temp = (g_goertzel_phasor_r * ri + g_goertzel_phasor_i * rr) >> 15;
+				rr = (g_goertzel_phasor_r * rr - g_goertzel_phasor_i * ri) >> 15;
+				ri = temp;
+
+				// rr, ri are now in the correct frame of reference.  Continue computing.
+
 				qibaselogs[qibaselogs_head] = ((uint16_t)rr) | (((uint16_t)ri)<<16);
 				qibaselogs_head = ( qibaselogs_head + 1 ) & ((LOG_GOERTZEL_LIST)-1);
 
@@ -400,8 +436,9 @@ void DMA1_Channel1_IRQHandler( void )
 				//int intensity = 1<<( ( 32 - __builtin_clz(s) )/2);
 				#define ABS(x) (((x)<0)?-(x):(x))
 				int intensity = (ABS(rr) + ABS(ri)) * 26100 / 32768; // Found experimentally (Also try to avoid divide-by-zero.
-				if( intensity == 0 )
-					intensity = 1;
+				//if( intensity == 0 )
+				//	intensity = 1;
+				intensity++;
 				intensity = (intensity + s/intensity)/2;
 				intensity = (intensity + s/intensity)/2;
 				intensity_average = intensity_average - (intensity_average>>12) + (intensity>>6);
@@ -714,6 +751,8 @@ void HandleHidUserReportOutComplete( struct _USBState * ctx )
 		if( numconfigs > 3) g_goertzel_coefficient = configs[5];
 		if( numconfigs > 4) g_goertzel_coefficient_s = configs[6];
 		if( numconfigs > 5) g_exactcompute = configs[7];
+		if( numconfigs > 6) g_goertzel_advance_r = configs[8];
+		if( numconfigs > 7) g_goertzel_advance_i = configs[9];
 
 		// Need to reset so we don't blast by.
 		g_goertzel_samples = 0;

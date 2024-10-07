@@ -24,12 +24,20 @@ function DrawSpan( rowspan, colspan, freq, target, docolor, extrastr = "" )
 
 function Goertz( n, mhz, fr, brf, exact_compute )
 {
-	let omega = fr * 3.1415926535*2.0;
+	let tau = 3.1415926535*2.0;
+	let omega = fr * tau;
 	var textarea = document.getElementById("goertzeloutput");
 
-	var g_goertzel_omega_per_sample = Math.round( ( omega*2*(1<<29)) );
+	var goertzel_omega_per_sample_real = ( omega*2*(1<<29));
+	var g_goertzel_omega_per_sample = Math.round( goertzel_omega_per_sample_real );
 	var g_goertzel_coefficient = Math.round( (2 * Math.cos( omega ) * (1<<30)) );
 	var g_goertzel_coefficient_s = Math.round( (2 * Math.sin( omega ) * (1<<30)) );
+
+	var omega_per_group = omega * brf;
+	var goertzel_phasor_advance_radians_per_sample = tau * (Math.round( omega_per_group / tau ) - omega_per_group / tau); 
+	var g_goertzel_advance_r = Math.cos( goertzel_phasor_advance_radians_per_sample ) * 32768;
+	var g_goertzel_advance_i = Math.sin( goertzel_phasor_advance_radians_per_sample ) * 32768;
+
 	var g_exactcompute = exact_compute;
 	textarea.value = 
 		"int g_pwm_period = ("+n+"-1);\n" +
@@ -37,7 +45,9 @@ function Goertz( n, mhz, fr, brf, exact_compute )
 		"int g_goertzel_buffer = ("+brf+");\n" +
 		"int32_t g_goertzel_omega_per_sample = " + g_goertzel_coefficient.toFixed(0) + "; // " + ( omega / (3.1415926535*2.0)).toFixed(6) + " of whole per step / " + mhz.toFixed(6) + "MHz\n" +
 		"int32_t g_goertzel_coefficient = " + g_goertzel_coefficient.toFixed(0) + ";\n" +
-		"int32_t g_goertzel_coefficient_s = " + g_goertzel_coefficient_s.toFixed(0) + ";\n";
+		"int32_t g_goertzel_coefficient_s = " + g_goertzel_coefficient_s.toFixed(0) + ";\n" +
+		"int32_t g_goertzel_advance_r = " + g_goertzel_advance_r.toFixed(0) + ";\n" +
+		"int32_t g_goertzel_advance_i = " + g_goertzel_advance_i.toFixed(0) + ";\n";
 
 	// Highlight its content
 	textarea.select();
@@ -45,7 +55,16 @@ function Goertz( n, mhz, fr, brf, exact_compute )
 	// Copy the highlighted text
 	document.execCommand("copy");
 
-	updateWebHidDeviceWithParameters( [ (n-1)|0, brf|0, g_goertzel_omega_per_sample|0, g_goertzel_coefficient|0, g_goertzel_coefficient_s|0, exact_compute|0 ] );
+	updateWebHidDeviceWithParameters( [ 
+		(n-1)|0,
+		brf|0,
+		g_goertzel_omega_per_sample|0,
+		g_goertzel_coefficient|0,
+		g_goertzel_coefficient_s|0,
+		exact_compute|0,
+		g_goertzel_advance_r|0,
+		g_goertzel_advance_i|0,
+		 ] );
 }
 
 function computeTable()
@@ -88,7 +107,7 @@ function computeTable()
 			"<TABLE BORDER=1>" +
 			"<TR><TD>Goertzel</TD></TR>" +
 			"<TR><TD>Goertzel (Inverse)</TD></TR>" +
-			"</TABLE><TEXTAREA ROWS=6 COLS=120 ID=goertzeloutput></TEXTAREA>" +
+			"</TABLE><TEXTAREA ROWS=8 COLS=120 ID=goertzeloutput></TEXTAREA>" +
 			"<P>Click on a ordinal offset to create the C code needed for that tuning parameter. Clicking will copy-to-clipboard.</P>" +
 			"<P>N Divisor #30 (row 3) is usually pretty good.  And, try to select things near 0.25 / 0.75, and avoid 0.0, 0.5, and 1.0.</P>" +
 			"<P>Goertzel's mode is for the ch32v203</P>";
