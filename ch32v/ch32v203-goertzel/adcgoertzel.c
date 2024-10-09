@@ -69,7 +69,12 @@ SOFTWARE.
 // For I2C, output will be on PB8/PB9 SCL/SDA
 //#define ENABLE_OLED
 //#define PWM_OUTPUT
+int g_volume_pwm = 127; // 0 - 127 (100%) (but you can go over 100) (For when using PWM)
 #define ENABLE_OLED_SCOPE
+//#define PROFILING_PIN PC8
+
+#define SAMPLETIME 1 // 0: 1.5 cycles; 1: 7.5 cycles; 2: 13.5 cycles; (0 would go fastest and is important in single-ADC mode, but 1 seems slightly better in 2-ADC mode)
+
 
 #ifdef ENABLE_OLED_SCOPE
 #define SH1107_128x128
@@ -92,7 +97,7 @@ SOFTWARE.
 #endif
 
 #if defined( ENABLE_OLED ) && defined( ENABLE_OLED_SCOPE )
-#error Can't be SPI and I2C OLED
+#error Cant be SPI and I2C OLED
 #endif
 
 
@@ -104,22 +109,20 @@ SOFTWARE.
 
 volatile uint16_t adc_buffer[ADC_BUFFSIZE];
 
-int g_volume_pwm = 127; // 0 - 127 (100%) (but you can go over 100)
-
 int32_t g_goertzel_phasor_r = 32768;
 int32_t g_goertzel_phasor_i = 0;
 
-int32_t g_goertzel_advance_r = 32768;
-int32_t g_goertzel_advance_i = 0;
-
 
 #if 1
-int g_pwm_period = (30-1);
-int g_goertzel_buffer = (180);
-int g_exactcompute = (0);
-int32_t g_goertzel_omega_per_sample = 5509657063; // 0.816667 of whole per step / 0.880000MHz
+// Very basic setup, for tuning to 880AM
+int g_pwm_period = (60-1);
+int g_exactcompute = (1);
+int g_goertzel_buffer = (1024);
+int32_t g_goertzel_omega_per_sample = 873460290; // 0.183333 of whole per step / -8.720000MHz
 int32_t g_goertzel_coefficient = 873460290;
-int32_t g_goertzel_coefficient_s = -1961823932;
+int32_t g_goertzel_coefficient_s = 1961823932;
+int32_t g_goertzel_advance_r = -3425;
+int32_t g_goertzel_advance_i = 32588;
 #endif
 
 int intensity_average = 1;
@@ -139,44 +142,53 @@ void SetupADC()
 	// ADC CLK is chained off of APB2.
 
 	// Reset the ADC to init all regs
-	RCC->APB2PRSTR |= RCC_APB2Periph_ADC1;
-	RCC->APB2PRSTR &= ~RCC_APB2Periph_ADC1;
+	RCC->APB2PRSTR |= RCC_APB2Periph_ADC1 | RCC_APB2Periph_ADC2;
+	RCC->APB2PRSTR &= ~( RCC_APB2Periph_ADC1 | RCC_APB2Periph_ADC2 );
 
 	// ADCCLK = 12 MHz => RCC_ADCPRE divide by 4
 	RCC->CFGR0 &= ~RCC_ADCPRE;  // Clear out the bis in case they were set
 	RCC->CFGR0 |= RCC_ADCPRE_DIV2; // Fastest possible (divide-by-2) NOTE: This is OUTSIDE the specified value in the datasheet.
 
 	// Set up single conversion on chl 7
-	ADC1->RSQR1 = 0;
-	ADC1->RSQR2 = 0;
 	ADC1->RSQR3 = CHANNEL;	// 0-9 for 8 ext inputs and two internals  Set to 7 for PA7
+	ADC2->RSQR3 = CHANNEL;	// 0-9 for 8 ext inputs and two internals  Set to 7 for PA7
+
+	ADC1->ISQR = CHANNEL; // Mirror in case we switch to injection mode.
+	ADC2->ISQR = CHANNEL;
 
 	// Not using injection group.
 
 	// Sampling time for channels. Careful: This has PID tuning implications.
 	// Note that with 3 and 3,the full loop (and injection) runs at 138kHz.
-	ADC1->SAMPTR2 = (0<<(3*CHANNEL));  // (3*channel)
+	ADC1->SAMPTR2 = (SAMPLETIME<<(3*CHANNEL));  // (3*channel)
+	ADC2->SAMPTR2 = (SAMPLETIME<<(3*CHANNEL));  // (3*channel)
 
 	// Turn on ADC and set rule group to sw trig
 	// 0 = Use TRGO event for Timer 1 to fire ADC rule.
 	ADC1->CTLR2 = ADC_ADON | ADC_EXTTRIG | ADC_DMA; 
+	ADC2->CTLR2 = ADC_ADON | ADC_EXTTRIG | ADC_EXTSEL_1;// | ADC_DMA; 
+		// For EXTTRIG, EXTSEL (none) = 0 = TIM1CC1 /
+		// For JEXTTRIG, EXTSEL = 0 = TIM1 TRGO  (Or ADC_JEXTSEL_0 => CH4)
 
 	// Reset calibration
 	ADC1->CTLR2 |= ADC_RSTCAL;
+	ADC2->CTLR2 |= ADC_RSTCAL;
 	while(ADC1->CTLR2 & ADC_RSTCAL);
+	while(ADC2->CTLR2 & ADC_RSTCAL);
 
 	// Calibrate ADC
 	ADC1->CTLR2 |= ADC_CAL;
+	ADC2->CTLR2 |= ADC_CAL;
 	while(ADC1->CTLR2 & ADC_CAL);
+	while(ADC2->CTLR2 & ADC_CAL);
 
 	// ADC_SCAN: Allow scanning.
+	ADC2->CTLR1 = ADC_SCAN;
 	ADC1->CTLR1 = 
-		//ADC_SCAN;
-		ADC_SCAN ;
-		//| ADC_BUFEN ;
-		//ADC_Pga_16 | ADC_SCAN | ADC_BUFEN ;
-		//ADC_Pga_64 | ADC_SCAN;
-
+		//ADC_DUALMOD_0 | ADC_DUALMOD_3 | // Alternate Trigger Mode (Can't use with DMA)
+		ADC_SCAN;
+		//ADC_Pga_16 | ADC_BUFEN ;
+		//ADC_Pga_64 |  ADC_BUFEN;
 
 	// Turn on DMA
 	RCC->AHBPCENR |= RCC_AHBPeriph_DMA1;
@@ -184,17 +196,16 @@ void SetupADC()
 	//DMA1_Channel1 is for ADC
 	DMA1_Channel1->PADDR = (uint32_t)&ADC1->RDATAR;
 	DMA1_Channel1->MADDR = (uint32_t)adc_buffer;
-	DMA1_Channel1->CNTR  = ADC_BUFFSIZE;
+	DMA1_Channel1->CNTR  = ADC_BUFFSIZE/2;
 	DMA1_Channel1->CFGR  =
 		DMA_M2M_Disable |		 
 		DMA_Priority_VeryHigh |
-		DMA_MemoryDataSize_HalfWord |
-		DMA_PeripheralDataSize_HalfWord |
+		DMA_MemoryDataSize_Word |
+		DMA_PeripheralDataSize_Word |
 		DMA_MemoryInc_Enable |
 		DMA_Mode_Circular |
 		DMA_DIR_PeripheralSRC;
 
-//	NVIC_SetPriority( DMA1_Channel1_IRQn, 0<<4 ); //We don't need to tweak priority.
 	NVIC_EnableIRQ( DMA1_Channel1_IRQn );
 	DMA1_Channel1->CFGR |= DMA_CFGR1_EN | DMA_IT_TC | DMA_IT_HT; // Transmission Complete + Half Empty Interrupts. 
 	
@@ -223,12 +234,15 @@ static void SetupTimer1()
 	TIM1->BDTR |= 0xc000;//TIM_MOE;
 #endif
 
-	TIM1->CCER |= TIM_CC1E;
+	TIM1->CCER |= TIM_CC1E | TIM_CC4E | TIM_CC3E;
 	TIM1->CHCTLR1 |= TIM_OC1M_2 | TIM_OC1M_1;
-	TIM1->CH1CVR = 1;
+	TIM1->CHCTLR2 |= TIM_OC3M_2 | TIM_OC3M_1 | TIM_OC4M_2 | TIM_OC4M_1;
+	TIM1->CH1CVR = 1; // In case we are using rule triggering
+	TIM1->CH3CVR = 1; // In case we are using rule (alternate) triggering
+	TIM1->CH4CVR = 1; // In case we are using injection triggering
 
-	// Setup TRGO to trigger for ADC (NOTE: Not on the 203! TIM1_TRGO is only connected to injection)
-	//TIM1->CTLR2 = TIM_MMS_1;
+	// Setup TRGO to trigger for ADC injection group
+	TIM1->CTLR2 = TIM_MMS_1;
 
 	// Enable TIM1 outputs
 	TIM1->BDTR = TIM_MOE;
@@ -237,6 +251,8 @@ static void SetupTimer1()
 
 #ifdef ENABLE_OLED_SCOPE
 
+// Command-mode, Set X, Disable Timer, Set Y, Enable Timer
+// Done this way to prevent streaking.
 uint8_t cmdxy[] = { 0x00, 0xd3, 0x30, 0xd5, 0xff, 0x00, 0xdc, 0x30, 0xd5, 0xf0 };
 
 void config_turbo_scope()
@@ -281,24 +297,15 @@ void ssd1306_send_turbo(uint8_t *data, uint8_t sz)
 	while(SPI1->STATR & SPI_STATR_BSY);
 	
 	funDigitalWrite( SSD1306_CS_PIN, FUN_HIGH );
-	
-	// we're happy
 }
+
 static void PlotPoint( int x, int y )
 {
-	// Set X, Pause, Set Y, Start
 	funDigitalWrite( SSD1306_CS_PIN, FUN_HIGH );
 	cmdxy[2] = x; cmdxy[7] = y;
 	DMA1_Channel3->CNTR  = sizeof(cmdxy);
 	funDigitalWrite( SSD1306_CS_PIN, FUN_LOW );
 	DMA1_Channel3->CFGR |= DMA_CFGR1_EN;
-
-	// Set X, Set Y
-//	uint8_t cmdxy[16] = { 0x00, 0xd3, 0x30, 0x00, 0x00, 0xdc, 0x30 };
-//	cmdxy[2] = x; cmdxy[6] = y;
-
-	//ssd1306_i2c_send(SSD1306_I2C_ADDR, cmdxy+1, sizeof(cmdxy)-1);
-	//ssd1306_send_turbo(cmdxy, sizeof(cmdxy));
 }
 #endif
 
@@ -347,7 +354,9 @@ void DMA1_Channel1_IRQHandler( void )
 		// Clear all possible flags.
 		DMA1->INTFCR = DMA1_IT_GL1;
 
-		int tpl = ADC_BUFFSIZE - DMA1_Channel1->CNTR; // Warning, sometimes this is == to the base, or == 0 (i.e. might be 256, if top is 255)
+		int tpl = ADC_BUFFSIZE - DMA1_Channel1->CNTR*2; 
+		// Warning, sometimes this is DMA1_Channel1->CNTR == to the base, or == 0 (i.e. might be 256, if top is 255)
+
 		tpl += ADC_BUFFSIZE;
 		tpl = (tpl & (ADC_BUFFSIZE-1));
 		if( tpl == ADC_BUFFSIZE ) tpl = 0;
@@ -366,6 +375,9 @@ void DMA1_Channel1_IRQHandler( void )
 			// Here is where the magic happens.
 
 #if 1
+			// Also, this is the current limiting factor for the maximum samplerate.
+			// We can't go above 7.2MSPS and keep up here when main CPU is @ 144MHz.
+
 			#define XSTR(x) #x
 			#define GOERTZELLOOP(idx)  \
 			asm volatile("\n\
@@ -548,15 +560,12 @@ void InnerLoop()
 		}
 #endif
 
-		int pxa = 0;
-
 		// Only display half of the list so the other half could
 		// be updated by the ISR.
-		int glread = qibaselogs_head;
-
-		int intensity = 0;
 
 #ifdef ENABLE_OLED
+		int pxa = 0;
+		int glread = qibaselogs_head;
 
 		for( pxa = 0; pxa < LOG_GOERTZEL_LIST; pxa++ )
 		{
@@ -589,16 +598,10 @@ void InnerLoop()
 		//if( ik == sizeof(ssd1306_buffer) ) ik = 0;
 
 		ssd1306_setbuf(0);
-
-#else
-		Delay_Ms(17);
 #endif
-		
-//		printf( "%6d %8d %8d - %8d %8d - %8d\n", g_goertzel_outs,g_goertzelp2_store, g_goertzelp_store, rr, ri, x );
 
-//		Delay_Ms(940);
-//printf( "!!!!\n ");
-
+		// Do nothing.
+		Delay_Ms(17);
 	}
 
 }
@@ -828,7 +831,7 @@ void HandleHidUserReportOutComplete( struct _USBState * ctx )
 		uint32_t * configs = (uint32_t*)scratchpad;
 		// Note: configs[0] == 0xac (command type)
 
-		printf( "Is Configure Packet %08x\n", configs[1] );
+		//printf( "Is Configure Packet %08x\n", configs[1] );
 
 		int numconfigs = configs[1];
 		if( numconfigs > 0) g_pwm_period = configs[2];
@@ -847,19 +850,23 @@ void HandleHidUserReportOutComplete( struct _USBState * ctx )
 				// Consider using PGA.
 				//ADC_Pga_16 | ADC_SCAN | ADC_BUFEN ;
 				//ADC_Pga_64 | ADC_SCAN;
-				ADC1->CTLR1 = 
-					ADC_SCAN | ADC_BUFEN;
+				ADC1->CTLR1 |= ADC_BUFEN;// | ADC_Pga_4; // Adding PGA causes wild oscillation.
+				ADC1->CTLR2 |= ADC_BUFEN;// | ADC_Pga_4;
 			}
 			else
 			{
-				ADC1->CTLR1 = 
-					ADC_SCAN;
+				ADC1->CTLR1 &= (~ADC_BUFEN);
+				ADC2->CTLR1 &= (~ADC_BUFEN);
 			}
 		}
 
 		// Need to reset so we don't blast by.
 		g_goertzel_samples = 0;
 		TIM1->ATRLR = g_pwm_period;
+
+		TIM1->CH1CVR = 1;
+		TIM1->CH3CVR = TIM1->ATRLR/2+1;
+
 
 		g_isConfigurePacket = 0;
 	}

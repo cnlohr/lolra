@@ -110,7 +110,7 @@ async function toggleAudio()
 						if( n == this.rbuffertail ) \
 						{ \
 							this.rbuffertail = (this.rbuffertail + (1|0))%(8192|0); \
-							console.log( `Overflow` ); \
+							/*console.log( `Overflow` ); */ \
 						} \
 						var vv = e.data[i]; \
 						this.dcoffset = this.dcoffset * 0.995 + vv * 0.005; \
@@ -128,7 +128,7 @@ async function toggleAudio()
 				var s = Math.fround( this.sampleplace );      /*float*/ \
 				var tail = this.rbuffertail | 0;              /* int*/  \
 				var tailnext = this.rbuffertail | 0;          /* int*/  \
-				if( tail == this.rbufferhead ) { console.log( "Underflow " ); return true; }\
+				if( tail == this.rbufferhead ) { /*console.log( "Underflow " );*/ return true; }\
 				var tsamp = Math.fround( this.rbuffer[tail] ); \
 				var nsamp = Math.fround( this.rbuffer[tailnext] ); \
 				this.totalsampcount += len|0; \
@@ -140,7 +140,7 @@ async function toggleAudio()
 						s -= excess; \
 						tail = ( tail + (excess|0) ) % (8192|0); \
 						tailnext = ( tail + (1|0) ) % (8192|0); \
-						if( tail == this.rbufferhead ) { console.log( "Underflow" ); break; } \
+						if( tail == this.rbufferhead ) { /* console.log( "Underflow" ); */ break; } \
 						tsamp = Math.fround( this.rbuffer[tail] ); \
 						nsamp = Math.fround( this.rbuffer[tailnext] ); \
 					} \
@@ -187,7 +187,7 @@ async function toggleAudio()
 		gainParam.setValueAtTime( 0, audioContext.currentTime );
 	}
 
-	var newVal = 0.1 - targetGain;
+	var newVal = 0.5 - targetGain;
 	console.log( "Setting gain to: " + newVal );
 	let gainParam = playingAudioProcessor.parameters.get("gain");
 	gainParam.setValueAtTime( newVal, audioContext.currentTime);
@@ -356,7 +356,7 @@ async function sendLoop()
 
 					ctx.fillStyle = `rgb( 255 255 255 )`;
 
-					let mulcoeff = 10000.0 / lastIntensity;
+					let mulcoeff = 30000.0 / lastIntensity;
 
 					var lot = 1.2;
 					var x = 253;
@@ -454,7 +454,7 @@ async function sendLoop()
 					if( audioContext != null && playingAudioProcessor != null )
 					{
 						// TODO: Use crystalmhz
-						let sampleAdvance = (144000000.0/sample_divisor) / audioContext.sampleRate;
+						let sampleAdvance = (system_rate/sample_divisor) / audioContext.sampleRate;
 						let sampleAdvanceParam = playingAudioProcessor.parameters.get("sampleAdvance");
 						sampleAdvanceParam.setValueAtTime( sampleAdvance, audioContext.currentTime);
 						playingAudioProcessor.port.postMessage( demodbuffer );
