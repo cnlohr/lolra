@@ -57,6 +57,7 @@ async function closeDeviceTool()
 {
 	loopAbort = false;
 	setStatusError( "Disconnected" );
+	dev = null;
 }
 
 var playingAudioProcessor = null;
@@ -267,6 +268,7 @@ let receiveReport = null;
 
 async function sendLoopError( e )
 {
+console.log( "SEND LOOP ERROR" );
 	sendReport = null;
 	receiveReport = null;
 	if( dev ) await dev.close();
@@ -308,7 +310,7 @@ async function sendLoop()
 
 	while( true )
 	{
-		if( dev && !loopAbort )
+		if( dev && dev !== null && !loopAbort )
 		{
 			receiveReport = dev.receiveFeatureReport( 0xAD ).catch( sendLoopError );
 			if( !receiveReport ) sendLoopError( "error creating receiveReport" );
@@ -494,5 +496,6 @@ async function sendLoop()
 			}
 		}
 	}
+	console.log( "ABORT\n" );
 }
 

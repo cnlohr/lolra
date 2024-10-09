@@ -79,6 +79,7 @@ SOFTWARE.
 #define SSD1306_DC_PIN   PA6
 #define SSD1306_MOSI_PIN PA7
 #define SSD1306_SCK_PIN  PA5
+#define SSD1306_BAUD_RATE_PRESCALER SPI_BaudRatePrescaler_4
 #include "ssd1306_spi.h"
 #include "ssd1306.h"
 #endif
@@ -112,14 +113,6 @@ int32_t g_goertzel_phasor_i = 0;
 int32_t g_goertzel_advance_r = 32768;
 int32_t g_goertzel_advance_i = 0;
 
-#if 0
-int g_pwm_period = (30-1);
-int g_goertzel_buffer = (752);
-int g_exactcompute = (0);
-int32_t g_goertzel_omega_per_sample = 2485087396; // 0.368351 of whole per step / 27.031915MHz
-int32_t g_goertzel_coefficient = -1453756170;
-int32_t g_goertzel_coefficient_s = 1580594514;
-#endif
 
 #if 1
 int g_pwm_period = (30-1);
@@ -129,52 +122,6 @@ int32_t g_goertzel_omega_per_sample = 5509657063; // 0.816667 of whole per step 
 int32_t g_goertzel_coefficient = 873460290;
 int32_t g_goertzel_coefficient_s = -1961823932;
 #endif
-
-#if 0
-int g_pwm_period = (31-1);
-int g_goertzel_buffer = (412);
-int g_exactcompute = (0);
-const int32_t g_goertzel_omega_per_sample = 1670254667; // 0.247573 of whole per step / 1.150016MHz
-const int32_t g_goertzel_coefficient = 32748822;
-const int32_t g_goertzel_coefficient_s = 2147233926;
-#endif
-
-#if 0
-int g_pwm_period = (30-1);
-int g_goertzel_buffer = (576);
-int g_exactcompute = (0);
-int32_t g_goertzel_omega_per_sample = 1264972285; // 0.187500 of whole per step / 90.300000MHz
-int32_t g_goertzel_coefficient = 821806413;
-int32_t g_goertzel_coefficient_s = 1984016189;
-#endif
-
-#if 0
-int g_pwm_period = (30-1);
-int g_goertzel_buffer = (320);
-int g_exactcompute = (0);
-const int32_t g_goertzel_omega_per_sample = 990894956; // 0.146875 of whole per step / 101.505000MHz
-const int32_t g_goertzel_coefficient = 1296126516;
-const int32_t g_goertzel_coefficient_s = 1712233066;
-#endif
-
-#if 0
-int g_pwm_period = (30-1);
-int g_goertzel_buffer = (384);
-int g_exactcompute = (0);
-const int32_t g_goertzel_omega_per_sample = 4251712402; // 0.630208 of whole per step / 27.025000MHz
-const int32_t g_goertzel_coefficient = -1468003291;
-const int32_t g_goertzel_coefficient_s = -1567371161;
-#endif
-
-#if 0
-int g_pwm_period = (30-1);
-int g_goertzel_buffer = (336);
-int g_exactcompute = (0);
-const int32_t g_goertzel_omega_per_sample = 1827182189; // 0.270833 of whole per step / 89.900000MHz
-const int32_t g_goertzel_coefficient = -280302863;
-const int32_t g_goertzel_coefficient_s = 2129111628;
-#endif
-
 
 int intensity_average = 1;
 
@@ -226,7 +173,8 @@ void SetupADC()
 	// ADC_SCAN: Allow scanning.
 	ADC1->CTLR1 = 
 		//ADC_SCAN;
-		ADC_SCAN | ADC_BUFEN ;
+		ADC_SCAN ;
+		//| ADC_BUFEN ;
 		//ADC_Pga_16 | ADC_SCAN | ADC_BUFEN ;
 		//ADC_Pga_64 | ADC_SCAN;
 
@@ -298,6 +246,41 @@ static void SetupTimer1()
 	TIM1->CTLR1 = TIM_CEN;
 }
 
+#ifdef ENABLE_OLED_SCOPE
+
+uint8_t ssd1306_send_turbo(uint8_t *data, uint8_t sz)
+{
+	funDigitalWrite( SSD1306_DC_PIN, FUN_LOW );
+	funDigitalWrite( SSD1306_CS_PIN, FUN_LOW );
+	
+	// send data
+	while(sz--)
+	{
+		// wait for TXE
+		while(!(SPI1->STATR & SPI_STATR_TXE));
+		
+		// Send byte
+		SPI1->DATAR = *data++;
+	}
+	
+	// wait for not busy before exiting
+	while(SPI1->STATR & SPI_STATR_BSY);
+	
+	funDigitalWrite( SSD1306_CS_PIN, FUN_HIGH );
+	
+	// we're happy
+	return 0;
+}
+static void PlotPoint( int x, int y )
+{
+	// Set X, Pause, Set Y, Start
+	uint8_t cmdxy[16] = { 0x00, 0xd3, 0x30, 0x00, 0xd5, 0xff, 0x00, 0x00, 0xdc, 0x30, 0x00, 0xd5, 0xf0 };
+	cmdxy[2] = x;
+	cmdxy[9] = y;
+	//ssd1306_i2c_send(SSD1306_I2C_ADDR, cmdxy+1, sizeof(cmdxy)-1);
+	ssd1306_send_turbo(cmdxy, sizeof(cmdxy));
+}
+#endif
 
 void InnerLoop() __attribute__((noreturn));
 
@@ -485,6 +468,27 @@ void DMA1_Channel1_IRQHandler( void )
 				adc_offset -= accumulate_over_window / g_goertzel_buffer;
 				accumulate_over_window = 0;
 
+#ifdef ENABLE_OLED_SCOPE
+
+			//	glread = ( glread + 1 ) & ( LOG_GOERTZEL_LIST -1 );
+
+			//	int16_t rr = combiq & 0xffff;
+			//	int16_t ri = combiq >> 16;
+
+				int rrplot = rr * 2048 / (intensity_average);
+				int riplot = ri * 2048 / (intensity_average);
+
+				rrplot += 64;
+				riplot += 64;
+
+				if( rrplot < 1 ) rrplot = 1;
+				if( riplot < 1 ) riplot = 1;
+				if( rrplot > 126 ) rrplot = 126;
+				if( riplot > 126 ) riplot = 126;
+
+				PlotPoint( rrplot, riplot );
+#endif
+
 #ifdef PROFILING_PIN
 	funDigitalWrite( PROFILING_PIN, 1 );
 #endif
@@ -516,7 +520,6 @@ static inline uint32_t gets2()
 	asm volatile( "mv %[ret], s2" : [ret]"=&r"(ret) );
 	return ret;
 }
-
 
 void InnerLoop()
 {
@@ -617,143 +620,6 @@ void setup_i2c_dma(void)
 	printf( "INTO\n" );
 }
 
-uint8_t ssd1306_i2c_send_turbo(uint8_t *data, uint8_t sz)
-{
-
-	int32_t timeout;
-	volatile uint32_t dump = 0;
-	static int notfirst = 0;
-
-	if( notfirst == 1 )
-	{
-		timeout = 100;
-		while((!ssd1306_i2c_chk_evt(SSD1306_I2C_EVENT_MASTER_TRANSMITTER_MODE_SELECTED)) && (timeout--));
-
-		while(DMA1_Channel6->CNTR);
-
-		// This one is reliable.
-		timeout = TIMEOUT_MAX*10;
-		while((!ssd1306_i2c_chk_evt(SSD1306_I2C_EVENT_MASTER_BYTE_TRANSMITTED)) && (timeout--));
-
-		I2C1->CTLR1 |= I2C_CTLR1_STOP;
-	}
-		notfirst = 1;
-
-
-/*
-	// wait for previous packet to finish
-	while(DMA1_Channel6->CNTR)
-	{
-		printf( "*%d / %08x %08x %08x\n", DMA1_Channel6->CNTR, DMA1_Channel6->CFGR, I2C1->CTLR1, I2C1->CTLR2 );
-	}
-*/
-	// init buffer for sending
-	memcpy((uint8_t *)i2c_send_buffer, data, sz);
-
-	// wait for not busy
-	timeout = TIMEOUT_MAX*10;
-	while((I2C1->STAR2 & I2C_STAR2_BUSY) && (timeout--));
-//	if(timeout==-1)
-//		return ssd1306_i2c_error(0);
-
-	DMA1_Channel6->CNTR  = sz-3;
-	I2C1->CTLR1 |= I2C_CTLR1_START;
-
-	// wait for master mode select  (This one is reliable)
-	timeout = TIMEOUT_MAX*10;
-	while((!ssd1306_i2c_chk_evt(SSD1306_I2C_EVENT_MASTER_MODE_SELECT)) && (timeout--));
-
-	//printf( "%08x\n", I2C1->STAR1 | (I2C1->STAR2<<16) );
-
-	//if(timeout==-1)
-	//	return ssd1306_i2c_error(1);
-
-
-	I2C1->DATAR = data[0];
-
-	// wait for transmit condition (this seems to not be reliable)
-//	printf( "W2: %d\n", timeout );
-	//if(timeout==-1)
-	//	return ssd1306_i2c_error(2);
-
-
-//	{
-//		printf( "K%d / %08x %08x %08x\n", DMA1_Channel6->CNTR, DMA1_Channel6->CFGR, I2C1->CTLR1, I2C1->CTLR2 );
-//	}
-
-
-	// wait for transmit condition
-//	timeout = TIMEOUT_MAX;
-//	while((!ssd1306_i2c_chk_evt(SSD1306_I2C_EVENT_MASTER_BYTE_TRANSMITTED)) && (timeout--));
-//	printf( "TO: %d\n", timeout );
-//	if(timeout==-1)
-	//	return ssd1306_i2c_error(2);
-
-
-	//Delay_Us(200);
-#if 0
-	int32_t timeout;
-	
-#ifdef IRQ_DIAG
-	GPIOC->BSHR = (1<<(3));
-#endif
-	
-	// error out if buffer under/overflow
-	if((sz > sizeof(ssd1306_i2c_send_buffer)) || !sz)
-		return 2;
-	
-	// wait for previous packet to finish
-	while(ssd1306_i2c_irq_state);
-	
-#ifdef IRQ_DIAG
-	GPIOC->BSHR = (1<<(16+3));
-	GPIOC->BSHR = (1<<(4));
-#endif
-	
-	// init buffer for sending
-	ssd1306_i2c_send_sz = sz;
-	ssd1306_i2c_send_ptr = ssd1306_i2c_send_buffer;
-	memcpy((uint8_t *)ssd1306_i2c_send_buffer, data, sz);
-	
-	// wait for not busy
-	timeout = TIMEOUT_MAX;
-	while((I2C1->STAR2 & I2C_STAR2_BUSY) && (timeout--));
-	if(timeout==-1)
-		return ssd1306_i2c_error(0);
-
-	// Set START condition
-	I2C1->CTLR1 |= I2C_CTLR1_START;
-	I2C1->DATAR = data[0];
-
-/*
-	// wait for master mode select
-	timeout = TIMEOUT_MAX;
-	while((!ssd1306_i2c_chk_evt(SSD1306_I2C_EVENT_MASTER_MODE_SELECT)) && (timeout--));
-	if(timeout==-1)
-		return ssd1306_i2c_error(1);
-
-	// send 7-bit address + write flag
-	I2C1->DATAR = data[0];
-
-	// wait for transmit condition
-	timeout = TIMEOUT_MAX;
-	while((!ssd1306_i2c_chk_evt(SSD1306_I2C_EVENT_MASTER_TRANSMITTER_MODE_SELECTED)) && (timeout--));
-	if(timeout==-1)
-		return ssd1306_i2c_error(2);
-*/
-	// Enable TXE interrupt
-	I2C1->CTLR2 |= I2C_CTLR2_ITBUFEN | I2C_CTLR2_ITEVTEN;
-	ssd1306_i2c_irq_state = 1;
-
-#ifdef IRQ_DIAG
-	GPIOC->BSHR = (1<<(16+4));
-#endif
-	printf( "...\n" );
-	// exit
-	return 0;
-#endif
-}
-
 
 int main()
 {
@@ -819,74 +685,33 @@ int main()
 	else
 		printf( "Initialized OLED\n" );
 
-	ssd1306_setbuf(1);
-	ssd1306_refresh();
-
-	while(1)
-	{
-		printf( "OK\n" );
-	}
-/*
 	ssd1306_setbuf(0);
 
 	// Setup a diagonal to allow for vector mode.
 	for( i = 0; i < 128; i++ )
 	{
 		ssd1306_drawPixel( i, i, 1 );
-		ssd1306_drawPixel( i+1, i, 1 );
+		//ssd1306_drawPixel( i+1, i, 1 );
 	}
 
 	ssd1306_refresh();
 
-	int rframe = 0;
-
 	uint8_t force_two_row_mode[] = {
-		0x00, 0xa8, 0, // Set MUX ratio (Actually # of lines to scan) (But it's this + 1)  You can make this 1 for wider.
+		0xa8, 0, // Set MUX ratio (Actually # of lines to scan) (But it's this + 1)  You can make this 1 for wider.
 	};
-	ssd1306_i2c_send(SSD1306_I2C_ADDR, force_two_row_mode, sizeof(force_two_row_mode));
 
-	// Last thing before normal operation
-	setup_i2c_dma();
+	ssd1306_pkt_send(force_two_row_mode, sizeof( force_two_row_mode ) , 1);
 
+#if 0 // Test streaking
+	int rframe = 0;
 	while(1)
 	{
-		// Set X, Pause, Set Y, Start
-		uint8_t cmdxy[17] = { SSD1306_I2C_ADDR<<1, 0x00, 0xd3, 0x30, 0x00, 0xd5, 0xff, 0x00, 0x00, 0xdc, 0x30, 0x00, 0xd5, 0xf0 };
-		cmdxy[3] = rframe;
-		cmdxy[10] = rframe>>8;
-		//ssd1306_i2c_send(SSD1306_I2C_ADDR, cmdxy+1, sizeof(cmdxy)-1);
-		ssd1306_i2c_send_turbo(cmdxy, sizeof(cmdxy));
+		PlotPoint( rframe & 0xff, rframe>>8 );
 		rframe++;
+		//Delay_Ms(1);
 	}
-*/
 #endif
 
-#if 0
-	int i = 0;
-	int k = 0;
-	int frame = 0;
-	while( 1)
-	{
-//		ssd1306_drawLine( (frame)%128, (0)%128, (0)%128, (127-frame)%128, 1 );
-		ssd1306_drawstr( frame%128, frame%128, "hello", 1 );
-
-		ssd1306_refresh();
-		ssd1306_setbuf(0);
-		frame++;
-	}
-
-	while(1);
-#endif
-
-#if 0
-	// turn on the op-amp
-	EXTEN->EXTEN_CTR |= EXTEN_OPA_EN;
-
-	// select op-amp pos pin: 0 = PA2, 1 = PD7
-	EXTEN->EXTEN_CTR |= EXTEN_OPA_PSEL;
-
-	// select op-amp neg pin: 0 = PA1, 1 = PD0
-	EXTEN->EXTEN_CTR |= EXTEN_OPA_NSEL;
 #endif
 
 #ifdef PROFILING_PIN
