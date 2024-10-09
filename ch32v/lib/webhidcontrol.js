@@ -187,7 +187,7 @@ async function toggleAudio()
 		gainParam.setValueAtTime( 0, audioContext.currentTime );
 	}
 
-	var newVal = 0.5 - targetGain;
+	var newVal = 1.0 - targetGain;
 	console.log( "Setting gain to: " + newVal );
 	let gainParam = playingAudioProcessor.parameters.get("gain");
 	gainParam.setValueAtTime( newVal, audioContext.currentTime);
@@ -441,7 +441,7 @@ async function sendLoop()
 							var po = FMphaseout = FMphaseout * 0.993 + diffphase;
 							if( po < 0.0 ) po += 1.0;
 							if( po > 1.0 ) po -= 1.0;
-							demodbuffer[i] = po;
+							demodbuffer[i] = po * .3; // Turn down FM it's really loud.
 						}
 
 						IQHistoryHead = (IQHistoryHead+1)%IQHistoryLen;

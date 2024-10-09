@@ -28,14 +28,16 @@ var lastGmhz;
 var lastGfr;
 var lastGbrf;
 var lastGexact;
+var lastTargetMHz;
 
-function Goertz( n, mhz, fr, brf, exact_compute )
+function Goertz( n, mhz, fr, brf, exact_compute, targetmhz )
 {
 	lastGn = n;
 	lastGmhz = mhz;
 	lastGfr = fr;
 	lastGbrf = brf;
 	lastGexact = exact_compute;
+	lastTargetMHz = targetmhz;
 	SendGoertz();
 }
 
@@ -91,8 +93,8 @@ function SendGoertz()
 		 ] );
 
 	// Update toggle control
-	let target = Number(document.getElementById("targetmhz").value );
-	var tz = (target * 10000000.0);
+	let target = lastTargetMHz;
+	var tz = (target * 10000000.0) + 0.05;
 	for( var i = 0|0; i < 10; i++ )
 	{
 		var tc = (tz / 1000000000.0) % 10;
@@ -158,7 +160,7 @@ function mhzm( event, ths )
 
 	quantaA = tquanta;
 	tgoertzelp = h;
-	Goertz( n, freq * (h+tgoertzelpoint), (tgoertzelpoint), quantaA , 1);
+	Goertz( n, freq * (h+tgoertzelpoint), (tgoertzelpoint), quantaA , 1, target);
 	return false;
 }
 
@@ -210,7 +212,7 @@ function computeTable()
 
 	if( goertzels || quadrature )
 	{
-		contents += "<input type=checkbox ID=toggle_adc_buffer onchange='toggleBuffer(this)'><label for=toggle_buffer>ADC Buffer Enable</label><BR>Scroll Wheel Control:<BR>";
+		contents += "<BR>Scroll Wheel Control:<BR>";
 		contents += "<TABLE BORDER=1>";
 		contents += '<TR><TH>d\\h</div></TH>';
 		for( let h = 0|min_harmonics; h <= max_harmonics; h++ )
@@ -284,7 +286,7 @@ function computeTable()
 						if( mode == 0 )
 						{
 							contents += "<TD COLSPAN=2>"
-							if( tgoertzelp == h ) contents += "<INPUT TYPE=SUBMIT ONCLICK='Goertz(" + n + ", " + freq * (h+goertzelpoint) + ", " + (goertzelpoint) + ", " + quantaA + ", 0)' VALUE='↑" + (goertzelpoint).toFixed(6) + "'/>";
+							if( tgoertzelp == h ) contents += "<INPUT TYPE=SUBMIT ONCLICK='Goertz(" + n + ", " + freq * (h+goertzelpoint) + ", " + (goertzelpoint) + ", " + quantaA + ", 0, " + freq + ")' VALUE='↑" + (goertzelpoint).toFixed(6) + "'/>";
 							contents += "</TD>";
 						}
 						else if( mode == 1 )
@@ -294,7 +296,7 @@ function computeTable()
 						else if( mode == 2 )
 						{
 							contents += "<TD COLSPAN=2>"
-							if( tgoertzelpi == h-1  ) contents += "<INPUT TYPE=SUBMIT ONCLICK='Goertz(" + n + ", " + freq * (h-goertzelpointinv) + ", " + goertzelpointinv + ", " + quantaINV + ", 0)' VALUE='↓" + goertzelpointinv.toFixed(6) + "'/>";
+							if( tgoertzelpi == h-1  ) contents += "<INPUT TYPE=SUBMIT ONCLICK='Goertz(" + n + ", " + freq * (h-goertzelpointinv) + ", " + goertzelpointinv + ", " + quantaINV + ", 0, " + freq + ")' VALUE='↓" + goertzelpointinv.toFixed(6) + "'/>";
 							contents += "</TD>";
 						}
 						else if( mode == 3 )
@@ -314,7 +316,7 @@ function computeTable()
 		contents += "<TABLE><TR><TD><TEXTAREA ROWS=6 COLS=120 ID=goertzeloutput></TEXTAREA></TD><TD><DIV>";
 
 		// Add widget to control various things, realtime.
-		contents += "<input type=checkbox ID=toggle_adc_buffer onchange='toggleBuffer(this)'><label for=toggle_buffer>ADC Buffer Enable</label><BR>Scroll Wheel Control:<BR>";
+		contents += "<BR>Scroll Wheel Control:<BR>";
 		contents += "<input id=mhzm0 onwheel='mhzm(event, this)' size=1>";
 		contents += "<input id=mhzm1 onwheel='mhzm(event, this)' size=1>";
 		contents += "<input id=mhzm2 onwheel='mhzm(event, this)' size=1>.";
@@ -363,7 +365,7 @@ function computeTable()
 						if( rid == 0 )
 						{
 							contents += "<TD COLSPAN=1 ROWSPAN=2>"
-							contents += "<INPUT TYPE=SUBMIT ONCLICK='Goertz(" + n + ", " + freq * (h+tgoertzelpoint) + ", " + (tgoertzelpoint) + ", " + quantaA + ", 1)' VALUE='↑" + n + "'/>";
+							contents += "<INPUT TYPE=SUBMIT ONCLICK='Goertz(" + n + ", " + freq * (h+tgoertzelpoint) + ", " + (tgoertzelpoint) + ", " + quantaA + ", 1, " + target + " )' VALUE='↑" + n + "'/>";
 							contents += "</TD>"
 						}
 					}
@@ -391,7 +393,7 @@ function computeTable()
 	document.getElementById( "TABLE" ).innerHTML = contents;
 }
 
-const savedFields = ["crystalmhz", "targetmhz", "QUADRATURE", "GOERTZELS", "GOERTZELS2", "quanta", "quantasearch"];
+const savedFields = ["crystalmhz", "targetmhz", "quanta", "quantasearch", "toggle_adc_buffer"];
 
 function SaveDefaults()
 {
@@ -412,9 +414,16 @@ function LoadDefaults()
 	{
 		let f = savedFields[i];
 		let e = document.getElementById(f);
-		if( e && localStorage.getItem( f ) )
+		let v = localStorage.getItem( f );
+		console.log( `Loading: ${e} ${f} ${v}`);
+		if( e && v )
 		{
-			e.value = localStorage.getItem( f );
+			if( v == 'on' )
+				e.checked = true;
+			else if( v == 'off' )
+				e.checked = false;
+			else
+				e.value = v;
 		}
 	}	
 }
@@ -467,6 +476,7 @@ Live Control:
 </TD>
 </TR>
 </TABLE>
+<input type=checkbox ID=toggle_adc_buffer onchange='toggleBuffer(this)'><label for=toggle_buffer>ADC Buffer Enable</label>
 
 <DIV ID=TABLE></DIV>
 
