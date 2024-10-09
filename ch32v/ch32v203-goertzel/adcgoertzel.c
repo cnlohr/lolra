@@ -41,21 +41,20 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-
 **/
-
-// NOT LORA!!! -- but experimenting with the possibility of rx.
 
 // SETUP INSTRUCTIONS:
 //   (1) `make` in the optionbytes folder to configure `RESET` correctly.
 //   (2) Create a tone (if using the funprog, ../ch32v003fun/minichlink/minichlink -X ECLK 1:235:189:9:3 for 27.48387097MHz
 //   (2) or, for 24.387096762MHz -  ../ch32v003fun/minichlink/minichlink -X ECLK 1:150:49:8:3
-
 /* More notes
-
  * Minimum sample time with DMA = fCPU / 28 (5.14MHz)
-
 */
+
+// TODO:
+// 1: Cleanup some code.
+// 2: Leverage other ADC.
+// 3: 
 
 
 #include "ch32v003fun.h"
@@ -198,19 +197,9 @@ void SetupADC()
 //	NVIC_SetPriority( DMA1_Channel1_IRQn, 0<<4 ); //We don't need to tweak priority.
 	NVIC_EnableIRQ( DMA1_Channel1_IRQn );
 	DMA1_Channel1->CFGR |= DMA_CFGR1_EN | DMA_IT_TC | DMA_IT_HT; // Transmission Complete + Half Empty Interrupts. 
-
-
-
-
-	// Turn on DMA channel 1 //XXX TODO I think this can go away.
-	DMA1_Channel1->CFGR |= DMA_CFGR1_EN;
 	
 	// Enable continuous conversion and DMA
 	ADC1->CTLR2 |= ADC_DMA; // | ADC_CONT;
-
-	// start conversion
-	ADC1->CTLR2 |= ADC_SWSTART;// | ADC_CONT;
-
 }
 
 static void SetupTimer1()
@@ -248,7 +237,32 @@ static void SetupTimer1()
 
 #ifdef ENABLE_OLED_SCOPE
 
-uint8_t ssd1306_send_turbo(uint8_t *data, uint8_t sz)
+uint8_t cmdxy[] = { 0x00, 0xd3, 0x30, 0xd5, 0xff, 0x00, 0xdc, 0x30, 0xd5, 0xf0 };
+
+void config_turbo_scope()
+{
+
+	DMA1_Channel3->PADDR = (uint32_t)&SPI1->DATAR;
+	DMA1_Channel3->MADDR = (uint32_t)cmdxy;
+	DMA1_Channel3->CNTR  = sizeof(cmdxy);
+	DMA1_Channel3->CFGR  =
+		DMA_M2M_Disable |		 
+		DMA_Priority_Low |
+		DMA_MemoryDataSize_Byte |
+		DMA_PeripheralDataSize_Byte |
+		DMA_MemoryInc_Enable |
+		DMA_Mode_Normal |
+		DMA_DIR_PeripheralDST;
+
+	// Turn on DMA channel 3
+	DMA1_Channel3->CFGR |= DMA_CFGR1_EN;
+	
+	funDigitalWrite( SSD1306_DC_PIN, FUN_LOW );
+
+	SPI1->CTLR2 |= SPI_CTLR2_TXDMAEN;
+}
+
+void ssd1306_send_turbo(uint8_t *data, uint8_t sz)
 {
 	funDigitalWrite( SSD1306_DC_PIN, FUN_LOW );
 	funDigitalWrite( SSD1306_CS_PIN, FUN_LOW );
@@ -269,16 +283,22 @@ uint8_t ssd1306_send_turbo(uint8_t *data, uint8_t sz)
 	funDigitalWrite( SSD1306_CS_PIN, FUN_HIGH );
 	
 	// we're happy
-	return 0;
 }
 static void PlotPoint( int x, int y )
 {
 	// Set X, Pause, Set Y, Start
-	uint8_t cmdxy[16] = { 0x00, 0xd3, 0x30, 0x00, 0xd5, 0xff, 0x00, 0x00, 0xdc, 0x30, 0x00, 0xd5, 0xf0 };
-	cmdxy[2] = x;
-	cmdxy[9] = y;
+	funDigitalWrite( SSD1306_CS_PIN, FUN_HIGH );
+	cmdxy[2] = x; cmdxy[7] = y;
+	DMA1_Channel3->CNTR  = sizeof(cmdxy);
+	funDigitalWrite( SSD1306_CS_PIN, FUN_LOW );
+	DMA1_Channel3->CFGR |= DMA_CFGR1_EN;
+
+	// Set X, Set Y
+//	uint8_t cmdxy[16] = { 0x00, 0xd3, 0x30, 0x00, 0x00, 0xdc, 0x30 };
+//	cmdxy[2] = x; cmdxy[6] = y;
+
 	//ssd1306_i2c_send(SSD1306_I2C_ADDR, cmdxy+1, sizeof(cmdxy)-1);
-	ssd1306_send_turbo(cmdxy, sizeof(cmdxy));
+	//ssd1306_send_turbo(cmdxy, sizeof(cmdxy));
 }
 #endif
 
@@ -429,17 +449,15 @@ void DMA1_Channel1_IRQHandler( void )
 				}
 
 				// Now, rotate rr, ri by that phasor.
-				temp = (g_goertzel_phasor_r * ri + g_goertzel_phasor_i * rr) >> 15;
-				rr = (g_goertzel_phasor_r * rr - g_goertzel_phasor_i * ri) >> 15;
+				// To get it in line >> 15, but we also want to divide by 8 (>>3) because that makes the rest of the math easier.
+				temp = (g_goertzel_phasor_r * ri + g_goertzel_phasor_i * rr) >> (15+3); 
+				rr = (g_goertzel_phasor_r * rr - g_goertzel_phasor_i * ri) >> (15+3);
 				ri = temp;
 
 				// rr, ri are now in the correct frame of reference.  Continue computing.
 
 				qibaselogs[qibaselogs_head] = ((uint16_t)rr) | (((uint16_t)ri)<<16);
 				qibaselogs_head = ( qibaselogs_head + 1 ) & ((LOG_GOERTZEL_LIST)-1);
-
-				rr>>=2;
-				ri>>=2;
 
 				int s = rr * rr + ri * ri;
 				//int intensity = 1<<( ( 32 - __builtin_clz(s) )/2);
@@ -450,6 +468,10 @@ void DMA1_Channel1_IRQHandler( void )
 				intensity++;
 				intensity = (intensity + s/intensity)/2;
 				intensity = (intensity + s/intensity)/2;
+
+				// intensity = rr * rr + ri * ri
+
+				// This performs a low-pass IIR without exploding intensity_average.
 				intensity_average = intensity_average - (intensity_average>>12) + (intensity>>6);
 
 				#ifdef PWM_OUTPUT
@@ -469,23 +491,14 @@ void DMA1_Channel1_IRQHandler( void )
 				accumulate_over_window = 0;
 
 #ifdef ENABLE_OLED_SCOPE
-
-			//	glread = ( glread + 1 ) & ( LOG_GOERTZEL_LIST -1 );
-
-			//	int16_t rr = combiq & 0xffff;
-			//	int16_t ri = combiq >> 16;
-
-				int rrplot = rr * 2048 / (intensity_average);
-				int riplot = ri * 2048 / (intensity_average);
-
+				int rrplot = rr * 1536 / (intensity_average);
+				int riplot = ri * 1536 / (intensity_average);
 				rrplot += 64;
 				riplot += 64;
-
 				if( rrplot < 1 ) rrplot = 1;
 				if( riplot < 1 ) riplot = 1;
 				if( rrplot > 126 ) rrplot = 126;
 				if( riplot > 126 ) riplot = 126;
-
 				PlotPoint( rrplot, riplot );
 #endif
 
@@ -543,6 +556,8 @@ void InnerLoop()
 
 		int intensity = 0;
 
+#ifdef ENABLE_OLED
+
 		for( pxa = 0; pxa < LOG_GOERTZEL_LIST; pxa++ )
 		{
 			uint32_t combiq = qibaselogs[glread];
@@ -562,12 +577,8 @@ void InnerLoop()
 			if( rr > 127 ) rr = 127;
 			if( ri > 127 ) ri = 127;
 			
-#ifdef ENABLE_OLED
 			ssd1306_drawPixel( rr, ri, 1 );
-#endif
 		}
-
-#ifdef ENABLE_OLED
 		//char cts[32];
 		//snprintf( cts, 32, "%d", intensity_average );
 		//ssd1306_drawstr( 0, 0, cts, 1 );
@@ -699,9 +710,14 @@ int main()
 	uint8_t force_two_row_mode[] = {
 		0xa8, 0, // Set MUX ratio (Actually # of lines to scan) (But it's this + 1)  You can make this 1 for wider.
 	};
-
 	ssd1306_pkt_send(force_two_row_mode, sizeof( force_two_row_mode ) , 1);
 
+	uint8_t force_max_speed[] = {
+		0xd5, 0xf0
+	};
+	ssd1306_pkt_send(force_max_speed, sizeof( force_max_speed ) , 1);
+
+	config_turbo_scope();
 #if 0 // Test streaking
 	int rframe = 0;
 	while(1)
