@@ -251,13 +251,18 @@ static void SetupTimer1()
 
 #ifdef ENABLE_OLED_SCOPE
 
+#ifdef PLOTGUARD
 // Command-mode, Set X, Disable Timer, Set Y, Enable Timer
-// Done this way to prevent streaking.
-uint8_t cmdxy[] = { 0x00, 0xd3, 0x30, 0xd5, 0xff, 0x00, 0xdc, 0x30, 0xd5, 0xf0 };
+// There doesn't seem to be a way of truly pausing the scanout.
+// GENERAL NOTE: This doesn't actually seem to help reduce streaking.
+uint8_t cmdxy[] = { 0x00, 0xd3, 0x30, 0xd5, 0xff, 0xdc, 0x30, 0xd5, 0xf0 };
+#else
+// Only set xy plot, and make sure clock is cranked.
+uint8_t cmdxy[] = { 0x00, 0xd3, 0x30, 0xdc, 0x30, 0xd5, 0xf0  };
+#endif
 
 void config_turbo_scope()
 {
-
 	DMA1_Channel3->PADDR = (uint32_t)&SPI1->DATAR;
 	DMA1_Channel3->MADDR = (uint32_t)cmdxy;
 	DMA1_Channel3->CNTR  = sizeof(cmdxy);
@@ -270,39 +275,23 @@ void config_turbo_scope()
 		DMA_Mode_Normal |
 		DMA_DIR_PeripheralDST;
 
-	// Turn on DMA channel 3
+	// Turn on DMA channel 3 (For SPI output)
 	DMA1_Channel3->CFGR |= DMA_CFGR1_EN;
-	
+
+	// All display controls from here on out are made using DC = 0.
 	funDigitalWrite( SSD1306_DC_PIN, FUN_LOW );
 
 	SPI1->CTLR2 |= SPI_CTLR2_TXDMAEN;
 }
 
-void ssd1306_send_turbo(uint8_t *data, uint8_t sz)
-{
-	funDigitalWrite( SSD1306_DC_PIN, FUN_LOW );
-	funDigitalWrite( SSD1306_CS_PIN, FUN_LOW );
-	
-	// send data
-	while(sz--)
-	{
-		// wait for TXE
-		while(!(SPI1->STATR & SPI_STATR_TXE));
-		
-		// Send byte
-		SPI1->DATAR = *data++;
-	}
-	
-	// wait for not busy before exiting
-	while(SPI1->STATR & SPI_STATR_BSY);
-	
-	funDigitalWrite( SSD1306_CS_PIN, FUN_HIGH );
-}
-
 static void PlotPoint( int x, int y )
 {
 	funDigitalWrite( SSD1306_CS_PIN, FUN_HIGH );
-	cmdxy[2] = x; cmdxy[7] = y;
+#ifdef PLOTGUARD
+	cmdxy[2] = x; cmdxy[6] = y;
+#else
+	cmdxy[2] = x; cmdxy[4] = y;
+#endif
 	DMA1_Channel3->CNTR  = sizeof(cmdxy);
 	funDigitalWrite( SSD1306_CS_PIN, FUN_LOW );
 	DMA1_Channel3->CFGR |= DMA_CFGR1_EN;
@@ -546,66 +535,6 @@ static inline uint32_t gets2()
 	return ret;
 }
 
-void InnerLoop()
-{
-	while(1){
-#if 0
-		int adcz = adc_buffer[0];
-		for( k = 0; k < 128; k++ )
-		{
-			int y = adc_buffer[k]-adcz + 64;
-			if( y < 0 ) y = 0;
-			if( y > 127 ) y = 127;
-			ssd1306_drawPixel( k, y, 1 );
-		}
-#endif
-
-		// Only display half of the list so the other half could
-		// be updated by the ISR.
-
-#ifdef ENABLE_OLED
-		int pxa = 0;
-		int glread = qibaselogs_head;
-
-		for( pxa = 0; pxa < LOG_GOERTZEL_LIST; pxa++ )
-		{
-			uint32_t combiq = qibaselogs[glread];
-			glread = ( glread + 1 ) & ( LOG_GOERTZEL_LIST -1 );
-
-			int16_t rr = combiq & 0xffff;
-			int16_t ri = combiq >> 16;
-
-			rr = rr * 512 / (intensity_average);
-			ri = ri * 512 / (intensity_average);
-
-			rr += 64;
-			ri += 64;
-
-			if( rr < 0 ) rr = 0;
-			if( ri < 0 ) ri = 0;
-			if( rr > 127 ) rr = 127;
-			if( ri > 127 ) ri = 127;
-			
-			ssd1306_drawPixel( rr, ri, 1 );
-		}
-		//char cts[32];
-		//snprintf( cts, 32, "%d", intensity_average );
-		//ssd1306_drawstr( 0, 0, cts, 1 );
-
-		ssd1306_refresh();
-		//static int ik = 0;
-		//printf( "%d %08x\n", ik, ssd1306_buffer[ik++] );
-		//if( ik == sizeof(ssd1306_buffer) ) ik = 0;
-
-		ssd1306_setbuf(0);
-#endif
-
-		// Do nothing.
-		Delay_Ms(17);
-	}
-
-}
-
 uint8_t i2c_send_buffer[16];
 void setup_i2c_dma(void)
 {
@@ -630,8 +559,6 @@ void setup_i2c_dma(void)
 	DMA1_Channel6->CFGR |= DMA_CFGR1_EN;
 
 	NVIC_DisableIRQ(I2C1_EV_IRQn);
-
-	printf( "INTO\n" );
 }
 
 
@@ -742,7 +669,56 @@ int main()
 	USBOTGSetup();
 
 
-	InnerLoop();
+	while(1){
+#if 0
+		// To draw a sinewave...
+		int adcz = adc_buffer[0];
+		for( k = 0; k < 128; k++ )
+		{
+			int y = adc_buffer[k]-adcz + 64;
+			if( y < 0 ) y = 0;
+			if( y > 127 ) y = 127;
+			ssd1306_drawPixel( k, y, 1 );
+		}
+#endif
+
+		// Only display half of the list so the other half could
+		// be updated by the ISR.
+
+#ifdef ENABLE_OLED
+		int pxa = 0;
+		int glread = qibaselogs_head;
+
+		for( pxa = 0; pxa < LOG_GOERTZEL_LIST; pxa++ )
+		{
+			uint32_t combiq = qibaselogs[glread];
+			glread = ( glread + 1 ) & ( LOG_GOERTZEL_LIST -1 );
+
+			int16_t rr = combiq & 0xffff;
+			int16_t ri = combiq >> 16;
+
+			rr = rr * 512 / (intensity_average);
+			ri = ri * 512 / (intensity_average);
+
+			rr += 64;
+			ri += 64;
+
+			if( rr < 0 ) rr = 0;
+			if( ri < 0 ) ri = 0;
+			if( rr > 127 ) rr = 127;
+			if( ri > 127 ) ri = 127;
+			
+			ssd1306_drawPixel( rr, ri, 1 );
+		}
+
+		ssd1306_refresh();
+
+		ssd1306_setbuf(0);
+#endif
+
+		// Do nothing.
+		Delay_Ms(17);
+	}
 }
 
 

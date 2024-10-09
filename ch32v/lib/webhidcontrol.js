@@ -330,7 +330,7 @@ async function sendLoop()
 				document.getElementById( "StatusPerf" ).innerHTML = 
 					(kBsecAvg).toFixed(2) + " kBytes/s<br>" +
 					(xActionSecAvg).toFixed(2)  + "transactions/sec<br>" +
-					"Count: " + goodCount + " / " + badCount;
+					"Count: " + goodCount + " / " + badCount + "<br>Inten: " + ((Math.log( lastIntensity * lastIntensity )/Math.log(10)) * 10-130).toFixed(2) + "db";
 				lastTime = thisTime;
 			}
 			else if( frameNo % updateStatsPerfPer == 2 )
