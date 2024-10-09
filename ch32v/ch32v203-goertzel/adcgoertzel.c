@@ -63,14 +63,39 @@ SOFTWARE.
 #include <stdlib.h>
 #include <math.h>
 
+
+// Channel for ADC
+#define CHANNEL 0
+
+// For I2C, output will be on PB8/PB9 SCL/SDA
+//#define ENABLE_OLED
+//#define PWM_OUTPUT
+#define ENABLE_OLED_SCOPE
+
+#ifdef ENABLE_OLED_SCOPE
+#define SH1107_128x128
+#define SSD1306_RST_PIN  PA3
+#define SSD1306_CS_PIN   PA4
+#define SSD1306_DC_PIN   PA6
+#define SSD1306_MOSI_PIN PA7
+#define SSD1306_SCK_PIN  PA5
+#include "ssd1306_spi.h"
+#include "ssd1306.h"
+#endif
+
+#ifdef ENABLE_OLED
 #define SH1107_128x128
 #define SSD1306_REMAP_I2C
-//#define PWM_OUTPUT
-#define ENABLE_OLED
-#define PROFILING_PIN PA0
-
+//#define SSD1306_I2C_IRQ
 #include "ssd1306_i2c.h"
 #include "ssd1306.h"
+#endif
+
+#if defined( ENABLE_OLED ) && defined( ENABLE_OLED_SCOPE )
+#error Can't be SPI and I2C OLED
+#endif
+
+
 #include "./usb_config.h"
 #include "../ch32v003fun/examples_v20x/otg_device/otgusb.h"
 
@@ -162,8 +187,8 @@ void SetupADC()
 	// XXX TODO -look into PGA
 	// XXX TODO - Look into tag-teaming the ADCs
 
-	// PDA is analog input chl 7
-	GPIOA->CFGLR &= ~(0xf<<(4*7));	// CNF = 00: Analog, MODE = 00: Input
+	// PDA is analog input chl CHANNEL
+	GPIOA->CFGLR &= ~(0xf<<(4*CHANNEL));	// CNF = 00: Analog, MODE = 00: Input
 	
 	// ADC CLK is chained off of APB2.
 
@@ -178,13 +203,13 @@ void SetupADC()
 	// Set up single conversion on chl 7
 	ADC1->RSQR1 = 0;
 	ADC1->RSQR2 = 0;
-	ADC1->RSQR3 = 7;	// 0-9 for 8 ext inputs and two internals
+	ADC1->RSQR3 = CHANNEL;	// 0-9 for 8 ext inputs and two internals  Set to 7 for PA7
 
 	// Not using injection group.
 
 	// Sampling time for channels. Careful: This has PID tuning implications.
 	// Note that with 3 and 3,the full loop (and injection) runs at 138kHz.
-	ADC1->SAMPTR2 = (0<<(3*7)); 
+	ADC1->SAMPTR2 = (0<<(3*CHANNEL));  // (3*channel)
 
 	// Turn on ADC and set rule group to sw trig
 	// 0 = Use TRGO event for Timer 1 to fire ADC rule.
@@ -229,7 +254,7 @@ void SetupADC()
 
 
 
-	// Turn on DMA channel 1
+	// Turn on DMA channel 1 //XXX TODO I think this can go away.
 	DMA1_Channel1->CFGR |= DMA_CFGR1_EN;
 	
 	// Enable continuous conversion and DMA
@@ -564,6 +589,172 @@ void InnerLoop()
 
 }
 
+uint8_t i2c_send_buffer[16];
+void setup_i2c_dma(void)
+{
+	// Turn on DMA
+	RCC->AHBPCENR |= RCC_AHBPeriph_DMA1;
+
+	//DMA1_Channel6 is for I2C1TX
+	DMA1_Channel6->PADDR = (uint32_t)&I2C1->DATAR;
+	DMA1_Channel6->MADDR = (uint32_t)&i2c_send_buffer;
+	DMA1_Channel6->CNTR  = 0;
+	DMA1_Channel6->CFGR  =
+		DMA_M2M_Disable |		 
+		DMA_Priority_Low |
+		DMA_MemoryDataSize_Byte |
+		DMA_PeripheralDataSize_Byte |
+		DMA_MemoryInc_Enable |
+		DMA_Mode_Normal |
+		DMA_DIR_PeripheralDST | 
+		0;
+	I2C1->CTLR2 = I2C_CTLR2_DMAEN | 0b111100;
+
+	DMA1_Channel6->CFGR |= DMA_CFGR1_EN;
+
+	NVIC_DisableIRQ(I2C1_EV_IRQn);
+
+	printf( "INTO\n" );
+}
+
+uint8_t ssd1306_i2c_send_turbo(uint8_t *data, uint8_t sz)
+{
+
+	int32_t timeout;
+	volatile uint32_t dump = 0;
+	static int notfirst = 0;
+
+	if( notfirst == 1 )
+	{
+		timeout = 100;
+		while((!ssd1306_i2c_chk_evt(SSD1306_I2C_EVENT_MASTER_TRANSMITTER_MODE_SELECTED)) && (timeout--));
+
+		while(DMA1_Channel6->CNTR);
+
+		// This one is reliable.
+		timeout = TIMEOUT_MAX*10;
+		while((!ssd1306_i2c_chk_evt(SSD1306_I2C_EVENT_MASTER_BYTE_TRANSMITTED)) && (timeout--));
+
+		I2C1->CTLR1 |= I2C_CTLR1_STOP;
+	}
+		notfirst = 1;
+
+
+/*
+	// wait for previous packet to finish
+	while(DMA1_Channel6->CNTR)
+	{
+		printf( "*%d / %08x %08x %08x\n", DMA1_Channel6->CNTR, DMA1_Channel6->CFGR, I2C1->CTLR1, I2C1->CTLR2 );
+	}
+*/
+	// init buffer for sending
+	memcpy((uint8_t *)i2c_send_buffer, data, sz);
+
+	// wait for not busy
+	timeout = TIMEOUT_MAX*10;
+	while((I2C1->STAR2 & I2C_STAR2_BUSY) && (timeout--));
+//	if(timeout==-1)
+//		return ssd1306_i2c_error(0);
+
+	DMA1_Channel6->CNTR  = sz-3;
+	I2C1->CTLR1 |= I2C_CTLR1_START;
+
+	// wait for master mode select  (This one is reliable)
+	timeout = TIMEOUT_MAX*10;
+	while((!ssd1306_i2c_chk_evt(SSD1306_I2C_EVENT_MASTER_MODE_SELECT)) && (timeout--));
+
+	//printf( "%08x\n", I2C1->STAR1 | (I2C1->STAR2<<16) );
+
+	//if(timeout==-1)
+	//	return ssd1306_i2c_error(1);
+
+
+	I2C1->DATAR = data[0];
+
+	// wait for transmit condition (this seems to not be reliable)
+//	printf( "W2: %d\n", timeout );
+	//if(timeout==-1)
+	//	return ssd1306_i2c_error(2);
+
+
+//	{
+//		printf( "K%d / %08x %08x %08x\n", DMA1_Channel6->CNTR, DMA1_Channel6->CFGR, I2C1->CTLR1, I2C1->CTLR2 );
+//	}
+
+
+	// wait for transmit condition
+//	timeout = TIMEOUT_MAX;
+//	while((!ssd1306_i2c_chk_evt(SSD1306_I2C_EVENT_MASTER_BYTE_TRANSMITTED)) && (timeout--));
+//	printf( "TO: %d\n", timeout );
+//	if(timeout==-1)
+	//	return ssd1306_i2c_error(2);
+
+
+	//Delay_Us(200);
+#if 0
+	int32_t timeout;
+	
+#ifdef IRQ_DIAG
+	GPIOC->BSHR = (1<<(3));
+#endif
+	
+	// error out if buffer under/overflow
+	if((sz > sizeof(ssd1306_i2c_send_buffer)) || !sz)
+		return 2;
+	
+	// wait for previous packet to finish
+	while(ssd1306_i2c_irq_state);
+	
+#ifdef IRQ_DIAG
+	GPIOC->BSHR = (1<<(16+3));
+	GPIOC->BSHR = (1<<(4));
+#endif
+	
+	// init buffer for sending
+	ssd1306_i2c_send_sz = sz;
+	ssd1306_i2c_send_ptr = ssd1306_i2c_send_buffer;
+	memcpy((uint8_t *)ssd1306_i2c_send_buffer, data, sz);
+	
+	// wait for not busy
+	timeout = TIMEOUT_MAX;
+	while((I2C1->STAR2 & I2C_STAR2_BUSY) && (timeout--));
+	if(timeout==-1)
+		return ssd1306_i2c_error(0);
+
+	// Set START condition
+	I2C1->CTLR1 |= I2C_CTLR1_START;
+	I2C1->DATAR = data[0];
+
+/*
+	// wait for master mode select
+	timeout = TIMEOUT_MAX;
+	while((!ssd1306_i2c_chk_evt(SSD1306_I2C_EVENT_MASTER_MODE_SELECT)) && (timeout--));
+	if(timeout==-1)
+		return ssd1306_i2c_error(1);
+
+	// send 7-bit address + write flag
+	I2C1->DATAR = data[0];
+
+	// wait for transmit condition
+	timeout = TIMEOUT_MAX;
+	while((!ssd1306_i2c_chk_evt(SSD1306_I2C_EVENT_MASTER_TRANSMITTER_MODE_SELECTED)) && (timeout--));
+	if(timeout==-1)
+		return ssd1306_i2c_error(2);
+*/
+	// Enable TXE interrupt
+	I2C1->CTLR2 |= I2C_CTLR2_ITBUFEN | I2C_CTLR2_ITEVTEN;
+	ssd1306_i2c_irq_state = 1;
+
+#ifdef IRQ_DIAG
+	GPIOC->BSHR = (1<<(16+4));
+#endif
+	printf( "...\n" );
+	// exit
+	return 0;
+#endif
+}
+
+
 int main()
 {
 	SystemInit();
@@ -604,7 +795,7 @@ int main()
 
 	SetupADC();
 
-#ifdef ENABLE_OLED
+#if defined( ENABLE_OLED )
 	ssd1306_i2c_setup();
 	ssd1306_i2c_init();
 
@@ -615,6 +806,59 @@ int main()
 
 	ssd1306_setbuf(1);
 	ssd1306_refresh();
+#endif
+
+#ifdef ENABLE_OLED_SCOPE
+	int i;
+
+	ssd1306_spi_init();
+	ssd1306_rst();
+
+	if( ssd1306_init() )
+		printf( "Failed to initialize OLED\n" );
+	else
+		printf( "Initialized OLED\n" );
+
+	ssd1306_setbuf(1);
+	ssd1306_refresh();
+
+	while(1)
+	{
+		printf( "OK\n" );
+	}
+/*
+	ssd1306_setbuf(0);
+
+	// Setup a diagonal to allow for vector mode.
+	for( i = 0; i < 128; i++ )
+	{
+		ssd1306_drawPixel( i, i, 1 );
+		ssd1306_drawPixel( i+1, i, 1 );
+	}
+
+	ssd1306_refresh();
+
+	int rframe = 0;
+
+	uint8_t force_two_row_mode[] = {
+		0x00, 0xa8, 0, // Set MUX ratio (Actually # of lines to scan) (But it's this + 1)  You can make this 1 for wider.
+	};
+	ssd1306_i2c_send(SSD1306_I2C_ADDR, force_two_row_mode, sizeof(force_two_row_mode));
+
+	// Last thing before normal operation
+	setup_i2c_dma();
+
+	while(1)
+	{
+		// Set X, Pause, Set Y, Start
+		uint8_t cmdxy[17] = { SSD1306_I2C_ADDR<<1, 0x00, 0xd3, 0x30, 0x00, 0xd5, 0xff, 0x00, 0x00, 0xdc, 0x30, 0x00, 0xd5, 0xf0 };
+		cmdxy[3] = rframe;
+		cmdxy[10] = rframe>>8;
+		//ssd1306_i2c_send(SSD1306_I2C_ADDR, cmdxy+1, sizeof(cmdxy)-1);
+		ssd1306_i2c_send_turbo(cmdxy, sizeof(cmdxy));
+		rframe++;
+	}
+*/
 #endif
 
 #if 0
