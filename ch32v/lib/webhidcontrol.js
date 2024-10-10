@@ -346,16 +346,18 @@ async function sendLoop()
 
 					ctx.clearRect(0, 0, liveGraph.width, liveGraph.height);
 
+					let grey = darkmode?"rgb( 240 240 240 )":"rgb(16 16 16)";
+					let mark = darkmode?"rgb( 255 255 255 )":"rgb(0 0 0)";
 
 					var filledness = lastNumQ * 198 / 120;
-					ctx.fillStyle = "rgb( 240 240 240 )";
+					ctx.fillStyle = grey;
 					ctx.fillRect( 2, 2 + 198 - filledness, 18, filledness - 2);
 
 					filledness = ( lastTimeUsed * 1.0 / lastTotalTime ) * 198;
-					ctx.fillStyle = "rgb( 240 240 240 )";
+					ctx.fillStyle = grey;
 					ctx.fillRect( 26, 2 + 198 - filledness, 18, filledness - 2 );
 
-					ctx.fillStyle = `rgb( 255 255 255 )`;
+					ctx.fillStyle = mark;
 
 					let mulcoeff = 2500.0 / lastIntensity;
 					var lot = 1.2;

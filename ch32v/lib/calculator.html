@@ -2,22 +2,23 @@
 <HTML>
 <HEAD>
 <LINK rel="shortcut icon" href="data:image/x-icon;," type="image/x-icon"> 
-<META charset="UTF-8">
+<META charset="UTF-8"/>
 <STYLE>
-body { background-color: Canvas; color: CanvasText; }
 :root { color-scheme: dark; }
 </STYLE>
-
 <SCRIPT src=webhidcontrol.js></SCRIPT>
-
 <SCRIPT>
+var darkmode = true;
+
+//body { background-color: Canvas; color: CanvasText; }
+
 function DrawSpan( rowspan, colspan, freq, target, docolor, extrastr = "" )
 {
 	var fdist = Math.abs( freq - target );
 	fdist = Math.pow( fdist, 0.5 ) * 500;
 //	if( fdist > 255 ) fdist = 255;
 	let ret = "<TD COLSPAN=" + colspan + ' ROWSPAN' + rowspan + ' ';
-	if( docolor ) ret += 'STYLE="color:black;background-color:rgb(' + fdist + ',' + (511-fdist) + ',0)";';
+	if( docolor ) ret += 'STYLE="color:black;background-color:rgba(' + fdist + ',' + (511-fdist) + ',0,0.2)";';
 	ret += '>' + extrastr + freq.toFixed(6) + "</TD>";
 	return ret;
 }
@@ -485,7 +486,7 @@ function onLoad()
 </TD>
 <TD VALIGN=TOP>
 
-Live Control:
+Live Control:<br>
 <TABLE><TR>
 <TD><INPUT TYPE=SUBMIT onClick="reqConnect()" VALUE="Open Device" ID=connectButton>
 <INPUT TYPE=SUBMIT onClick="toggleAudio()" VALUE="Play Audio" ID="ToggleAudioButton">
