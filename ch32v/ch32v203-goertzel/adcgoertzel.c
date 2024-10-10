@@ -75,7 +75,6 @@ int g_volume_pwm = 127; // 0 - 127 (100%) (but you can go over 100) (For when us
 
 #define SAMPLETIME 1 // 0: 1.5 cycles; 1: 7.5 cycles; 2: 13.5 cycles; (0 would go fastest and is important in single-ADC mode, but 1 seems slightly better in 2-ADC mode)
 
-
 #ifdef ENABLE_OLED_SCOPE
 #define SH1107_128x128
 #define SSD1306_RST_PIN  PA3
@@ -111,7 +110,7 @@ volatile uint16_t adc_buffer[ADC_BUFFSIZE];
 
 int32_t g_goertzel_phasor_r = 32768;
 int32_t g_goertzel_phasor_i = 0;
-
+int32_t g_attenuation_pow2 = 4;
 
 #if 1
 // Very basic setup, for tuning to 880AM
@@ -423,8 +422,8 @@ void DMA1_Channel1_IRQHandler( void )
 
 				int32_t zp = g_goertzelp_store;
 				int32_t zp2 = g_goertzelp2_store;
-				int32_t rr = (((int64_t)(g_goertzel_coefficient  ) * (int64_t)zp<<1)>>32) - (zp2);
-				int32_t ri = (((int64_t)(g_goertzel_coefficient_s) * (int64_t)zp<<1)>>32);
+				int32_t rr = (((int64_t)(g_goertzel_coefficient  ) * (int64_t)zp<<1)>>(32+g_attenuation_pow2)) - (zp2>>g_attenuation_pow2);
+				int32_t ri = (((int64_t)(g_goertzel_coefficient_s) * (int64_t)zp<<1)>>(32+g_attenuation_pow2));
 
 				// Advanced the current goertzel advance 
 				// phasor = phasor * advance;
@@ -451,8 +450,8 @@ void DMA1_Channel1_IRQHandler( void )
 
 				// Now, rotate rr, ri by that phasor.
 				// To get it in line >> 15, but we also want to divide by 8 (>>3) because that makes the rest of the math easier.
-				temp = (g_goertzel_phasor_r * ri + g_goertzel_phasor_i * rr) >> (15+3); 
-				rr = (g_goertzel_phasor_r * rr - g_goertzel_phasor_i * ri) >> (15+3);
+				temp = (g_goertzel_phasor_r * ri + g_goertzel_phasor_i * rr) >> (15); 
+				rr = (g_goertzel_phasor_r * rr - g_goertzel_phasor_i * ri) >> (15);
 				ri = temp;
 
 				// rr, ri are now in the correct frame of reference.  Continue computing.
@@ -474,6 +473,8 @@ void DMA1_Channel1_IRQHandler( void )
 
 				// This performs a low-pass IIR without exploding intensity_average.
 				intensity_average = intensity_average - (intensity_average>>12) + (intensity>>6);
+				if( ((int32_t)intensity_average) >= 1<<23 ) intensity_average = (1<<23)-1;
+				if( ((int32_t)intensity_average) < 2048 ) intensity_average = 2048;
 
 				#ifdef PWM_OUTPUT
 				intensity = intensity * g_volume_pwm * g_pwm_period / (intensity_average>>(10-12));
@@ -767,7 +768,11 @@ int HandleHidUserGetReportSetup( struct _USBState * ctx, tusb_control_request_t 
 		int samps_to_send = (qibaselogs_head - last_baselog + LOG_GOERTZEL_LIST * 2 - 1) & (LOG_GOERTZEL_LIST-1);
 		if( samps_to_send > 120 ) samps_to_send = 120;
 
-		((uint32_t*)scratchpad)[0] = (intensity_average<<12) | samps_to_send;
+		int intensity_send = intensity_average;
+
+		if( intensity_send >= (1<<24) )
+			intensity_send = (1<<24)-1;
+		((uint32_t*)scratchpad)[0] = (((uint32_t)intensity_send)<<8) | samps_to_send;
 		((uint32_t*)scratchpad)[1] = (g_lastper<<16) | g_lastlen;
 		((uint32_t*)scratchpad)[2] = (0<<16) | (((g_pwm_period+1)*g_goertzel_buffer)); //LSW = 144MHz / X
 
@@ -835,6 +840,7 @@ void HandleHidUserReportOutComplete( struct _USBState * ctx )
 				ADC2->CTLR1 &= (~ADC_BUFEN);
 			}
 		}
+		if( numconfigs > 9) g_attenuation_pow2 = configs[11];
 
 		// Need to reset so we don't blast by.
 		g_goertzel_samples = 0;

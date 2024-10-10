@@ -52,6 +52,7 @@ function SendGoertz()
 	let tau = 3.1415926535*2.0;
 	let omega = fr * tau;
 	var textarea = document.getElementById("goertzeloutput");
+	var g_attenuation_pow2 = Number( document.getElementById( "g_attenuation_pow2" ).value );
 
 	var goertzel_omega_per_sample_real = ( omega*2*(1<<29));
 	var g_goertzel_omega_per_sample = Math.round( goertzel_omega_per_sample_real );
@@ -64,21 +65,27 @@ function SendGoertz()
 	var g_goertzel_advance_i = Math.sin( goertzel_phasor_advance_radians_per_sample ) * 32768;
 
 	var g_exactcompute = exact_compute;
-	textarea.value = 
-		"int g_pwm_period = ("+n+"-1); // " + system_rate/lastGn/1000000. + " MHz Samplerate\n" +
-		"int g_exactcompute = ("+exact_compute+");\n" +
-		"int g_goertzel_buffer = ("+brf+");\n" +
-		"int32_t g_goertzel_omega_per_sample = " + g_goertzel_coefficient.toFixed(0) + "; // " + ( omega / (3.1415926535*2.0)).toFixed(6) + " of whole per step / " + mhz.toFixed(6) + "MHz\n" +
-		"int32_t g_goertzel_coefficient = " + g_goertzel_coefficient.toFixed(0) + ";\n" +
-		"int32_t g_goertzel_coefficient_s = " + g_goertzel_coefficient_s.toFixed(0) + ";\n" +
-		"int32_t g_goertzel_advance_r = " + g_goertzel_advance_r.toFixed(0) + ";\n" +
-		"int32_t g_goertzel_advance_i = " + g_goertzel_advance_i.toFixed(0) + ";\n";
 
-	// Highlight its content
-	textarea.select();
+	if( textarea )
+	{
+		textarea.value = 
+			"int g_pwm_period = ("+n+"-1); // " + system_rate/lastGn/1000000. + " MHz Samplerate\n" +
+			"int g_exactcompute = ("+exact_compute+");\n" +
+			"int g_goertzel_buffer = ("+brf+");\n" +
+			"int32_t g_goertzel_omega_per_sample = " + g_goertzel_coefficient.toFixed(0) + "; // " + ( omega / (3.1415926535*2.0)).toFixed(6) + " of whole per step / " + mhz.toFixed(6) + "MHz\n" +
+			"int32_t g_goertzel_coefficient = " + g_goertzel_coefficient.toFixed(0) + ";\n" +
+			"int32_t g_goertzel_coefficient_s = " + g_goertzel_coefficient_s.toFixed(0) + ";\n" +
+			"int32_t g_goertzel_advance_r = " + g_goertzel_advance_r.toFixed(0) + ";\n" +
+			"int32_t g_goertzel_advance_i = " + g_goertzel_advance_i.toFixed(0) + ";\n";
+			"int32_t g_attenuation_pow2 = " + g_attenuation_pow2.toFixed(0) + ";\n";
 
-	// Copy the highlighted text
-	document.execCommand("copy");
+		// Highlight its content
+		textarea.select();
+
+		// Copy the highlighted text
+		document.execCommand("copy");
+
+	}
 
 	updateWebHidDeviceWithParameters( [ 
 		(n-1)|0,
@@ -90,6 +97,7 @@ function SendGoertz()
 		g_goertzel_advance_r|0,
 		g_goertzel_advance_i|0,
 		document.getElementById( "toggle_adc_buffer").checked ? 1 : 0,
+		g_attenuation_pow2,
 		 ] );
 
 	// Update toggle control
@@ -109,6 +117,17 @@ function toggleBuffer( ths )
 	SendGoertz();
 }
 
+function attenuationpow2wheel( event, ths )
+{
+	event.preventDefault();
+	let dy = event.deltaY > 0 ? -1 : 1;
+	var thss = Number(ths.value) + dy;
+	if( thss < -9 ) thss = -9;
+	if( thss > 9 ) thss = 9;
+	ths.value = thss;
+	UpdateQuickSettings();
+}
+
 function mhzm( event, ths )
 {
 	event.preventDefault();
@@ -126,8 +145,11 @@ function mhzm( event, ths )
 
 	lastGmhz = hz/10000000.0;
 	document.getElementById("targetmhz").value = lastGmhz;
+	UpdateQuickSettings();
+}
 
-
+function UpdateQuickSettings()
+{
 	let xtal = Number(document.getElementById("crystalmhz").value );
 	let target = Number(document.getElementById("targetmhz").value );
 	let quadrature = document.getElementById("QUADRATURE").checked;
@@ -317,16 +339,16 @@ function computeTable()
 
 		// Add widget to control various things, realtime.
 		contents += "<BR>Scroll Wheel Control:<BR>";
-		contents += "<input id=mhzm0 onwheel='mhzm(event, this)' size=1>";
-		contents += "<input id=mhzm1 onwheel='mhzm(event, this)' size=1>";
-		contents += "<input id=mhzm2 onwheel='mhzm(event, this)' size=1>.";
-		contents += "<input id=mhzm3 onwheel='mhzm(event, this)' size=1>";
-		contents += "<input id=mhzm4 onwheel='mhzm(event, this)' size=1>";
-		contents += "<input id=mhzm5 onwheel='mhzm(event, this)' size=1>,";
-		contents += "<input id=mhzm6 onwheel='mhzm(event, this)' size=1>";
-		contents += "<input id=mhzm7 onwheel='mhzm(event, this)' size=1>";
-		contents += "<input id=mhzm8 onwheel='mhzm(event, this)' size=1>,";
-		contents += "<input id=mhzm9 onwheel='mhzm(event, this)' size=1>";
+		contents += "<input id=mhzm0 onwheel='mhzm(event, this)' size=1 type=number min=0 max=9 style='width:2em'>";
+		contents += "<input id=mhzm1 onwheel='mhzm(event, this)' size=1 type=number min=0 max=9 style='width:2em'>";
+		contents += "<input id=mhzm2 onwheel='mhzm(event, this)' size=1 type=number min=0 max=9 style='width:2em'>.";
+		contents += "<input id=mhzm3 onwheel='mhzm(event, this)' size=1 type=number min=0 max=9 style='width:2em'>";
+		contents += "<input id=mhzm4 onwheel='mhzm(event, this)' size=1 type=number min=0 max=9 style='width:2em'>";
+		contents += "<input id=mhzm5 onwheel='mhzm(event, this)' size=1 type=number min=0 max=9 style='width:2em'>,";
+		contents += "<input id=mhzm6 onwheel='mhzm(event, this)' size=1 type=number min=0 max=9 style='width:2em'>";
+		contents += "<input id=mhzm7 onwheel='mhzm(event, this)' size=1 type=number min=0 max=9 style='width:2em'>";
+		contents += "<input id=mhzm8 onwheel='mhzm(event, this)' size=1 type=number min=0 max=9 style='width:2em'>,";
+		contents += "<input id=mhzm9 onwheel='mhzm(event, this)' size=1 type=number min=0 max=9 style='width:2em'>";
 		contents += "</DIV></TD></TR></TABLE><BR>";
 		contents += "v Click in this row; <TABLE BORDER=1>";
 		contents += '<TR><TH>d\\h</div></TH>';
@@ -393,7 +415,7 @@ function computeTable()
 	document.getElementById( "TABLE" ).innerHTML = contents;
 }
 
-const savedFields = ["crystalmhz", "targetmhz", "quanta", "quantasearch", "toggle_adc_buffer"];
+const savedFields = ["crystalmhz", "targetmhz", "quanta", "quantasearch", "toggle_adc_buffer", "g_attenuation_pow2"];
 
 function SaveDefaults()
 {
@@ -476,7 +498,10 @@ Live Control:
 </TD>
 </TR>
 </TABLE>
+<div id=GeneralData></DIV>
 <input type=checkbox ID=toggle_adc_buffer onchange='toggleBuffer(this)'><label for=toggle_buffer>ADC Buffer Enable</label>
+<BR>Pow2 Attenuation: 
+<input id=g_attenuation_pow2 onwheel='attenuationpow2wheel(event, this)' size=3 type=number style="width:3em" value=3><br>
 
 <DIV ID=TABLE></DIV>
 

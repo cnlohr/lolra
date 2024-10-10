@@ -329,8 +329,9 @@ async function sendLoop()
 
 				document.getElementById( "StatusPerf" ).innerHTML = 
 					(kBsecAvg).toFixed(2) + " kBytes/s<br>" +
-					(xActionSecAvg).toFixed(2)  + "transactions/sec<br>" +
-					"Count: " + goodCount + " / " + badCount + "<br>Inten: " + ((Math.log( lastIntensity * lastIntensity )/Math.log(10)) * 10-130).toFixed(2) + "db";
+					(xActionSecAvg).toFixed(2)  + "transactions/sec<br>";
+				document.getElementById( "GeneralData" ).innerHTML =
+					"Count: " + goodCount + " / " + badCount + "<br>Inten: " + ((Math.log( lastIntensity * lastIntensity )/Math.log(10)) * 10-120).toFixed(2) + "db (" + lastIntensity + ")";
 				lastTime = thisTime;
 			}
 			else if( frameNo % updateStatsPerfPer == 2 )
@@ -356,8 +357,7 @@ async function sendLoop()
 
 					ctx.fillStyle = `rgb( 255 255 255 )`;
 
-					let mulcoeff = 30000.0 / lastIntensity;
-
+					let mulcoeff = 2500.0 / lastIntensity;
 					var lot = 1.2;
 					var x = 253;
 					for( var i = (IQHistoryHead-1) & (IQHistoryLen-1); i != IQHistoryHead|0; i = (i - 1 + IQHistoryLen) & (IQHistoryLen-1) )
@@ -412,7 +412,7 @@ async function sendLoop()
 					let time_used  = data[1]&0xffff;
 					let sample_divisor  = data[2]&0xffff;
 					let demodbuffer = new Float32Array(numq);
-					let mulcoeff = 100.0 / lastIntensity;
+					let mulcoeff = 16.0 / lastIntensity;
 					for( var i = 0|0; i < numq; i++ )
 					{
 						let vv = IQHistoryArray[IQHistoryHead] = data[i+3];
