@@ -297,6 +297,45 @@ FMiirphase = 0.0; /* for FM */
 FMlastphase = 0.0; /* for FM */
 FMphaseout = 0.0; /* for FM */
 
+lastadc = 0|0;
+
+
+remote_clock_mhz = 0;
+remote_clock_last_timestamp = 0|0;
+remote_clock_last_timems = 0.0;
+remote_clock_initted = false;
+remote_clock_refinement = 1.0;
+remote_clock_total_s = 0;
+remote_clock_total_ticks = 0.0;
+
+function ComputeRemoteClock( remote_time_ticks, now_ms )
+{
+	if( !remote_clock_initted )
+	{
+		remote_clock_last_timestamp = remote_time_ticks;
+		remote_clock_last_timems = now_ms;
+		remote_clock_refinement = 1.0;
+		remote_clock_initted = true;
+		remote_clock_total_ms = 0;
+		remote_clock_total_ticks = 0|0;
+		return;
+	}
+
+	var delta_s = (now_ms - remote_clock_last_timems)/1000.0;
+	var delta_clock = ((remote_time_ticks - remote_clock_last_timestamp)|0)*2; // convert 144MHz to 288MHz
+	var this_mhz = delta_clock / delta_s;
+
+	remote_clock_total_s += delta_s;
+	remote_clock_total_ticks += delta_clock * 1.0;
+
+	remote_clock_mhz = remote_clock_total_ticks / remote_clock_total_s;
+
+	remote_clock_total_s *= 0.99999;
+	remote_clock_total_ticks *= 0.99999;
+
+	remote_clock_last_timestamp = remote_time_ticks;
+	remote_clock_last_timems = now_ms;
+}
 
 async function sendLoop()
 {
@@ -331,7 +370,13 @@ async function sendLoop()
 					(kBsecAvg).toFixed(2) + " kB/s<br>" +
 					(xActionSecAvg).toFixed(2)  + "x/s<br>";
 				document.getElementById( "GeneralData" ).innerHTML =
-					"Count: " + goodCount + " / " + badCount + "<br>Inten: " + ((Math.log( lastIntensity * lastIntensity )/Math.log(10)) * 10-120).toFixed(2) + "db (" + lastIntensity + ")";
+					"<TABLE WIDTH=100%><TR><TD width=25%>Count: " + goodCount + " / " + badCount + "</td>" +
+					"<td width=20%>Inten: " + ((Math.log( lastIntensity * lastIntensity )/Math.log(10)) * 10-120).toFixed(2) + "db (" + lastIntensity + ")</td>" +
+					"<td width=20%>ADCs: " + (lastadc>>16).toFixed(0)  + " / " + (lastadc&0xffff).toFixed(0)  + "</td>" +
+					"<td width=20%>Remote clock: <INPUT TYPE=SUBMIT VALUE=" + (remote_clock_mhz/1000000.0).toFixed(6) + ` ONMOUSEDOWN="document.getElementById('crystalmhz').value = ${remote_clock_mhz/1000000.0};">MHz ` + "</TD>" +
+					"<td width=20%>" + ((remote_clock_mhz-288000000)/288).toFixed(3) + " PPM</td>" +
+					"</tr></table>";
+
 				lastTime = thisTime;
 			}
 			else if( frameNo % updateStatsPerfPer == 2 )
@@ -407,17 +452,21 @@ async function sendLoop()
 				let receiveData = await receiveReport;
 				if( receiveData && receiveData.buffer )
 				{
+					// Receive data from USB (from HandleHidUserGetReportSetup)
 					let data = new Uint32Array( receiveData.buffer.slice( 0, 508 ) );
 					let intensity = data[0]>>8;
 					let numq = data[0] & 0xff;
 					let time_total = data[1]>>16;
 					let time_used  = data[1]&0xffff;
 					let sample_divisor  = data[2]&0xffff;
+					let remote_time = data[3];
+					ComputeRemoteClock( remote_time, performance.now() );
+					lastadc = data[4];
 					let demodbuffer = new Float32Array(numq);
 					let mulcoeff = 16.0 / lastIntensity;
 					for( var i = 0|0; i < numq; i++ )
 					{
-						let vv = IQHistoryArray[IQHistoryHead] = data[i+3];
+						let vv = IQHistoryArray[IQHistoryHead] = data[i+5];
 						let vi = vv >> 16;
 						let vq = vv & 0xffff;
 						if( vi >= 32768 ) vi = vi-65535;
@@ -455,7 +504,6 @@ async function sendLoop()
 
 					if( audioContext != null && playingAudioProcessor != null )
 					{
-						// TODO: Use crystalmhz
 						let sampleAdvance = (system_rate/sample_divisor) / audioContext.sampleRate;
 						let sampleAdvanceParam = playingAudioProcessor.parameters.get("sampleAdvance");
 						sampleAdvanceParam.setValueAtTime( sampleAdvance, audioContext.currentTime);

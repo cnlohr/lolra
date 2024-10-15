@@ -779,8 +779,11 @@ int HandleHidUserGetReportSetup( struct _USBState * ctx, tusb_control_request_t 
 		((uint32_t*)scratchpad)[1] = (g_lastper<<16) | g_lastlen;
 		((uint32_t*)scratchpad)[2] = (0<<16) | (((g_pwm_period+1)*g_goertzel_buffer)); //LSW = 144MHz / X
 
+		((uint32_t*)scratchpad)[3] = SysTick->CNT;
+		((uint32_t*)scratchpad)[4] = *((uint32_t*)adc_buffer);
+
 		int i;
-		for( i = 3; i < samps_to_send + 3; i++ )
+		for( i = 5; i < samps_to_send + 5; i++ )
 		{
 			last_baselog = (last_baselog+1)&(LOG_GOERTZEL_LIST-1);
 			((uint32_t*)(scratchpad))[i] = ((int32_t*)qibaselogs)[last_baselog];
