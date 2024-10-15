@@ -328,8 +328,8 @@ async function sendLoop()
 				xActionSecAvg = xActionSecAvg * 0.9 + xActionSec * 0.1;
 
 				document.getElementById( "StatusPerf" ).innerHTML = 
-					(kBsecAvg).toFixed(2) + " kBytes/s<br>" +
-					(xActionSecAvg).toFixed(2)  + "transactions/sec<br>";
+					(kBsecAvg).toFixed(2) + " kB/s<br>" +
+					(xActionSecAvg).toFixed(2)  + "x/s<br>";
 				document.getElementById( "GeneralData" ).innerHTML =
 					"Count: " + goodCount + " / " + badCount + "<br>Inten: " + ((Math.log( lastIntensity * lastIntensity )/Math.log(10)) * 10-120).toFixed(2) + "db (" + lastIntensity + ")";
 				lastTime = thisTime;

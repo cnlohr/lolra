@@ -636,7 +636,10 @@ int main()
 		//ssd1306_drawPixel( i+1, i, 1 );
 	}
 
+	// Not sure why, need to do it a few times to make it stick?
 	ssd1306_refresh();
+	ssd1306_refresh();
+
 
 	uint8_t force_two_row_mode[] = {
 		0xa8, 0, // Set MUX ratio (Actually # of lines to scan) (But it's this + 1)  You can make this 1 for wider.
