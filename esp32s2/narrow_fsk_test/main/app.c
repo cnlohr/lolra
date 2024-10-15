@@ -185,13 +185,24 @@ static inline uint32_t getCycleCount()
 #define I2C_APLL    0X6D
 
 
-// Number of discrete frequencies
-// NOTE: This must be pretty high to keep
-// accuracy of specific target frequencies.
-#define CHIPSSPREAD 8192
-
-
 int lastend = 0;
+
+// This generates a slow sweep over 17.8 seconds of exactly one full SDM0 iteration
+// this is to measure how good dithering can be.
+
+const float fRadiator = 28.08; // In MHz 28.08MHz = in RTTY section of 10 Meters HAM band.
+const float fHarmonic = 1.0;
+const float fXTAL = 40;
+
+// Set to 2 for highest possible frequencies (up to 69MHz) Lower to get more control at lower frequencies.  This is the part in parenthesis (ODIV+2)
+// Higher numbers will give you more control. But, there is a limit. 350<40 * (SDM2 + SDM1/(2^8) + SDM0/(2^16) + 4)<500
+// Set to 3 for up to 46MHz
+// Set to 4 for up to 34MHz
+// set to 5 for up to 27MHz (well 27MHzish, you can go a tad higher)
+const float nPLLDivisorD2 = 5;
+
+
+
 
 // Configures APLL = 480 / 4 = 120
 // 40 * (SDM2 + SDM1/(2^8) + SDM0/(2^16) + 4) / ( 2 * (ODIV+2) );
@@ -214,8 +225,8 @@ void IRAM_ATTR local_rtc_clk_apll_enable(bool enable, uint32_t sdm0, uint32_t sd
 	// Settings determined experimentally.
 	REGI2C_WRITE_MASK(I2C_APLL, I2C_APLL_OC_TSCHGP, 0 ); // 0 or 1
 	REGI2C_WRITE_MASK(I2C_APLL, I2C_APLL_EN_FAST_CAL, 1 ); // 0 or 1
-	REGI2C_WRITE_MASK(I2C_APLL, I2C_APLL_OC_DHREF_SEL, 0 ); // 0..3
-	REGI2C_WRITE_MASK(I2C_APLL, I2C_APLL_OC_DLREF_SEL, 0 ); // 0..3
+	REGI2C_WRITE_MASK(I2C_APLL, I2C_APLL_OC_DHREF_SEL, 3 ); // 0..3
+	REGI2C_WRITE_MASK(I2C_APLL, I2C_APLL_OC_DLREF_SEL, 2 ); // 0..3
 	REGI2C_WRITE_MASK(I2C_APLL, I2C_APLL_SDM_DITHER, 1 ); // 0 or 1
 	REGI2C_WRITE_MASK(I2C_APLL, I2C_APLL_OC_DVDD, 25 ); // 0 .. 31
 
@@ -291,7 +302,7 @@ void sandbox_main()
 	int sdm0 = 100;
 	int sdm1 = 230;
 	int sdm2 = 8;
-	int odiv = 0;
+	int odiv = nPLLDivisorD2-2;
 
 	local_rtc_clk_apll_enable( use_apll, sdm0, sdm1, sdm2, odiv );
 
@@ -319,123 +330,33 @@ void sandbox_main()
 uint32_t frame = 0;
 void sandbox_tick()
 {
-	//uprintf( "%08x\n", REGI2C_READ(I2C_APLL, I2C_APLL_DSDM2 ));
-	// 40 * (SDM2 + SDM1/(2^8) + SDM0/(2^16) + 4) / ( 2 * (ODIV+2) );\n
 
-	// 13rd harmonic.  
-	const float fRadiator = 50.50 + 0.00; // 0.02 is specific to this device.
-	const float fBandwidth = 1;
-	const float fHarmonic = 1.0;
-	const float fOffset = -(fBandwidth/2);
-	const float fXTAL = 40;
 
-	const float fTarg = (fRadiator+fOffset)/fHarmonic;
+	const float fTarg = (fRadiator)/fHarmonic;
 	const float fAPLL = fTarg * 2;
-	const uint32_t sdmBaseTarget = ( fAPLL * 4 / fXTAL - 4 ) * 65536 + 0.5; // ~649134
+	const uint32_t sdmBaseTarget = ( fAPLL * (nPLLDivisorD2*2) / fXTAL - 4 ) * 65536 + 0.5; // ~649134
 
 
-	const float fRange = (fBandwidth)/fHarmonic;
-	const float fAPLLRange = fRange * 2;
-	const float sdmRange = ( fAPLLRange * 4 / fXTAL ) * 65536; // ~126
-
-	// 491520 clocks per chip @ SF8 (2.048ms per chirp)
-	const uint32_t sdmDivisor = ( CHIPSSPREAD / sdmRange ) + 0.5;
-
-
-#if 0
-	// For DEBUGGING ONLY
-	int k;
-//DisableISR();
-	for( k = 0; k < 33; k++ )
-	{
-		int fplv = 0;
-
-		// Send every second
-		// If you want to dialate time, do it here. 
-		frame = (getCycleCount()/200) % 24000000;
-		fplv = SigGen( frame, codeTarg );
-		uint32_t codeTargUse = codeTarg + fplv;
-		uint32_t sdm = (codeTargUse * 2 / 40 - 4 * 65536);  //XXX WARNING CHARLES, why does this move in pairs?
-		apll_quick_update( sdm );
-		if( fplv < 0 ) break;
-
-		if( fplv > 0 )
-			uprintf( "%d %d\n", (int)sdm, (int)fplv );
-	}
-//EnableISR();
-#else
-
-	uint32_t start = getCycleCount();
-	frame = (start) % 24000000;
-	int do_send = false;
-	if( (uint32_t)(start - lastend) > 240000000 )
-	{
-		do_send = true;
-	}
-
-	{
-		int spin;
-
-		gpio_matrix_out( 39, PRO_ALONEGPIO_OUT0_IDX, 0, 0 );
-		gpio_set_drive_capability( 39, GPIO_DRIVE_CAP_3 );
-
-		// Create an RGB Rainbow value
-		uint32_t ws_out = 0xff00ff;//do_send? 0 : 0xff;
-
-		#define nop __asm__ __volatile__("nop\n")
-		int i;
-		// Shift out all 24 bits, note the 1 and 3 for timing is baesed off an XTAL clock.
-		for( i = 0; i < 24; i++ )
-		{
-			__asm__ __volatile__ ("set_bit_gpio_out 0x1");
-
-			int high_for = ( ws_out & 0x800000 )?3:1;
-			for( spin = 0; spin < high_for; spin++ ) nop;
-
-			__asm__ __volatile__ ("clr_bit_gpio_out 0x1");
-			int low_for = ( ws_out & 0x800000 )?1:3;
-			for( spin = 0; spin < low_for; spin++ ) nop;
-
-			ws_out<<=1;
-		}
-		esp_rom_delay_us( 5000 );
-
-	}
-
-	if( do_send )
 	{
 		int iterct = 0;
 		int dither = 0;
 
 		gpio_matrix_out( GPIO_NUM(RF1_PIN), CLK_I2S_MUX_IDX, 1, 0 );
 		gpio_matrix_out( GPIO_NUM(RF2_PIN), CLK_I2S_MUX_IDX, 0, 0 );
-		//REG_SET_FIELD(RTC_CNTL_ANA_CONF_REG, RTC_CNTL_PLLA_FORCE_PD, 0);
-		//REG_SET_FIELD(RTC_CNTL_ANA_CONF_REG, RTC_CNTL_PLLA_FORCE_PU, 1);
 
 		//DisableISR();
+
 		while(1)
 		{
 			int fplv = 0;
-			// Send every second
-			// If you want to dialate time, do it here. 
-			frame = (getCycleCount()) - start;
-			//fplv = SigGen( frame, sdmBaseTarget );
-
-			//fplv = ((frame & 0x30000000 ) >> 28) * CHIPSSPREAD / 4;
-			fplv = ((frame & 0x30000000 ) >> 28) *sdmDivisor;
-
-
-			//XXX TODO: Experiment more with dither.  It doesn't appear to have an immediate effect?
-			//dither = ( dither + sdmDivisor/4) % sdmDivisor;
-			uint32_t sdm = sdmBaseTarget + ( fplv + dither ) / sdmDivisor;
-
-			if( fplv < 0 ) break;
+			frame = (getCycleCount());
+			fplv = 0;
+			int microtone = ((frame & 0xfff00000 ) >> 20);
+			dither = (((iterct)&0xffff)<microtone)?1:0;
+			uint32_t sdm = sdmBaseTarget + fplv + dither;//( fplv ) / sdmDivisor + dither;
 			apll_quick_update( sdm );
 			iterct++;
 		}
-		//EnableISR();
-		//REG_SET_FIELD(RTC_CNTL_ANA_CONF_REG, RTC_CNTL_PLLA_FORCE_PU, 0);
-		//REG_SET_FIELD(RTC_CNTL_ANA_CONF_REG, RTC_CNTL_PLLA_FORCE_PD, 1);
 
 		gpio_matrix_out( GPIO_NUM(RF1_PIN), CLK_I2S_MUX_IDX, 1, 1 );
 		gpio_matrix_out( GPIO_NUM(RF2_PIN), CLK_I2S_MUX_IDX, 0, 1 );
@@ -443,7 +364,6 @@ void sandbox_tick()
 		printf( "Iter: %d\n", iterct );
 		lastend = getCycleCount();
 	}
-#endif
 
 //	vTaskDelay( 1 );
 }
