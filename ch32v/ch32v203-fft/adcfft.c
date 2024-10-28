@@ -62,8 +62,13 @@ SOFTWARE.
 #include <stdio.h>
 
 #define SH1107_128x128
-#define SSD1306_REMAP_I2C
-#include "ssd1306_i2c.h"
+#define SSD1306_RST_PIN  PA3
+#define SSD1306_CS_PIN   PA4
+#define SSD1306_DC_PIN   PA6
+#define SSD1306_MOSI_PIN PA7
+#define SSD1306_SCK_PIN  PA5
+#define SSD1306_BAUD_RATE_PRESCALER SPI_BaudRatePrescaler_4
+#include "ssd1306_spi.h"
 #include "ssd1306.h"
 
 #define FIX_FFT_IMPLEMENTATION
@@ -442,8 +447,8 @@ int main()
 	SetupADC();
 
 	printf( "Setting up OLED.\n" );
-	ssd1306_i2c_setup();
-	uint8_t ret = ssd1306_i2c_init();
+	//ssd1306_spi_setup();
+	uint8_t ret = ssd1306_spi_init();
 	ssd1306_init();
 	ssd1306_setbuf(0);
 
