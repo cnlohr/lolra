@@ -11,7 +11,7 @@ var lastIntensity = 1.0;
 var lastNumQ = 0;
 var lastTotalTime = 1;
 var lastTimeUsed = 1;
-
+var didSetupGeneralData = false;
 var graphIsClicked = false;
 
 function graphClick( e )
@@ -337,6 +337,11 @@ function ComputeRemoteClock( remote_time_ticks, now_ms )
 	remote_clock_last_timems = now_ms;
 }
 
+function updateCrystalWithMHz()
+{
+	document.getElementById('crystalmhz').value = remote_clock_mhz/1000000.0;
+}
+
 async function sendLoop()
 {
 	const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -369,13 +374,28 @@ async function sendLoop()
 				document.getElementById( "StatusPerf" ).innerHTML = 
 					(kBsecAvg).toFixed(2) + " kB/s<br>" +
 					(xActionSecAvg).toFixed(2)  + "x/s<br>";
-				document.getElementById( "GeneralData" ).innerHTML =
-					"<TABLE WIDTH=100% border=1><TR><TD width=25%>Count: " + goodCount + " / " + badCount + "</td>" +
-					"<td width=20%>Inten: " + ((Math.log( lastIntensity * lastIntensity )/Math.log(10)) * 10-120).toFixed(2) + "db (" + lastIntensity + ")</td>" +
-					"<td width=20%>ADCs: " + (lastadc>>16).toFixed(0)  + " / " + (lastadc&0xffff).toFixed(0)  + "</td>" +
-					"<td width=20%>Remote clock: <INPUT TYPE=SUBMIT VALUE=" + (remote_clock_mhz/1000000.0).toFixed(6) + ` ONMOUSEDOWN="document.getElementById('crystalmhz').value = ${remote_clock_mhz/1000000.0};">MHz ` + "</TD>" +
-					"<td width=20%>" + ((remote_clock_mhz-288000000)/288).toFixed(3) + " PPM</td>" +
-					"</tr></table>";
+
+				if( !didSetupGeneralData )
+				{
+					document.getElementById( "GeneralData" ).innerHTML =
+						"<TABLE WIDTH=100% border=1><TR><TD width=25% ID=gdCount>Count: " + goodCount + " / " + badCount + "</td>" +
+						"<td width=20% ID=gdInten>Inten: " + ((Math.log( lastIntensity * lastIntensity )/Math.log(10)) * 10-120).toFixed(2) + "db (" + lastIntensity + ")</td>" +
+						"<td width=20% ID=gdADCs>ADCs: " + (lastadc>>16).toFixed(0)  + " / " + (lastadc&0xffff).toFixed(0)  + "</td>" +
+						"<td width=20%><INPUT TYPE=submit ID=gdButton style='padding:.1em' VALUE=" + (remote_clock_mhz/1000000.0).toFixed(6) + ` ONMOUSEDOWN="updateCrystalWithMHz()"> MHz ` + "</TD>" +
+						"<td width=20% ID=gdPPM>" + ((remote_clock_mhz-288000000)/288).toFixed(3) + " PPM</td>" +
+						"</tr></table>";
+					didSetupGeneralData = true;
+				}
+				else
+				{
+
+					document.getElementById( "gdCount" ).innerHTML = "Count: " + goodCount + " / " + badCount;
+					document.getElementById( "gdInten" ).innerHTML = "Inten: " + ((Math.log( lastIntensity * lastIntensity )/Math.log(10)) * 10-120).toFixed(2) + "db (" + lastIntensity + ")";
+					document.getElementById( "gdADCs" ).innerHTML = "ADC:" + (lastadc>>16).toFixed(0)  + " / " + (lastadc&0xffff).toFixed(0);
+					document.getElementById( "gdButton" ).value = "" + (remote_clock_mhz/1000000.0).toFixed(6);
+					document.getElementById( "gdPPM" ).innerHTML = "" + ((remote_clock_mhz-288000000)/288).toFixed(3) + " PPM";
+					didSetupGeneralData = true;
+				}
 
 				lastTime = thisTime;
 			}

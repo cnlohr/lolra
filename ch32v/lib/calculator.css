@@ -173,7 +173,6 @@ input[type=number] {
 	}
 }
 
-
 textarea,input:not([type='number']) {
 	background: var(--bg-0);
 	border: 0;
