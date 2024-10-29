@@ -370,7 +370,7 @@ async function sendLoop()
 					(kBsecAvg).toFixed(2) + " kB/s<br>" +
 					(xActionSecAvg).toFixed(2)  + "x/s<br>";
 				document.getElementById( "GeneralData" ).innerHTML =
-					"<TABLE WIDTH=100%><TR><TD width=25%>Count: " + goodCount + " / " + badCount + "</td>" +
+					"<TABLE WIDTH=100% border=1><TR><TD width=25%>Count: " + goodCount + " / " + badCount + "</td>" +
 					"<td width=20%>Inten: " + ((Math.log( lastIntensity * lastIntensity )/Math.log(10)) * 10-120).toFixed(2) + "db (" + lastIntensity + ")</td>" +
 					"<td width=20%>ADCs: " + (lastadc>>16).toFixed(0)  + " / " + (lastadc&0xffff).toFixed(0)  + "</td>" +
 					"<td width=20%>Remote clock: <INPUT TYPE=SUBMIT VALUE=" + (remote_clock_mhz/1000000.0).toFixed(6) + ` ONMOUSEDOWN="document.getElementById('crystalmhz').value = ${remote_clock_mhz/1000000.0};">MHz ` + "</TD>" +

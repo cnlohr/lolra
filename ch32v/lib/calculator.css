@@ -26,22 +26,12 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
     src: url('AudioLinkMono-Bold.ttf')  format('truetype')
 }
 
-@property --dark {
-	syntax: "<color>";
-	inherits: true;
-	initial-value: #111;
-}
-
-@property --light {
-	syntax: "<color>";
-	inherits: true;
-	initial-value: white;
-}
-
 :root {
 	color-scheme: dark;
 	--gl: radial-gradient(circle 1px at 0px 0px, var(--light) 1px, transparent 0);
 	--gd: radial-gradient(circle 1px at 0px 0px, var(--dark) 1px, transparent 0);
+	--dark: #111;
+	--light: #eee;
 	--bg-0: var(--dark);
 	--bg-1: var(--gl) 0px 0px / 4px 4px, var(--dark);
 	--bg-2: var(--gl) 0px 0px / 4px 4px, var(--gl) 2px 2px / 4px 4px, var(--dark);
@@ -166,7 +156,7 @@ input::-webkit-inner-spin-button {
 input[type=number] {
 	background: var(--bg-0);
 	outline: 0;
-	/*text-indent: 12px;*/
+    -moz-appearance:textfield; /* Firefox */
 	padding-top: 1rem;
 	padding-bottom: 1rem;
 	padding-left: 1.1rem;
@@ -191,6 +181,7 @@ textarea,input:not([type='number']) {
 	outline: 0;
 	border-radius: .8rem;
 	padding: .5rem;
+	padding-bottom:.3rem;
 	text-shadow: var(--l-shadow);
 	border: 1px var(--light) solid;
 	animation: dark-to-light 200ms ease-out forwards;
@@ -203,7 +194,7 @@ textarea,input:not([type='number']) {
 	}
 }
 
-button, input[type=submit] {
+button,input[type=submit] {
 	background: var(--bg-0);
 	border: 0;
 	outline: 0;

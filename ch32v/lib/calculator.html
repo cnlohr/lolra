@@ -13,10 +13,20 @@ var darkmode = true;
 function DrawSpan( rowspan, colspan, freq, target, docolor, extrastr = "" )
 {
 	var fdist = Math.abs( freq - target );
-	fdist = Math.pow( fdist, 0.5 ) * 500;
-//	if( fdist > 255 ) fdist = 255;
+	fdist = Math.pow( fdist, 0.5 ) * 300;
+	if( fdist > 511 ) fdist = 511;
+
 	let ret = "<TD COLSPAN=" + colspan + ' ROWSPAN' + rowspan + ' ';
-	if( docolor ) ret += 'STYLE="color:black;background-color:rgba(' + fdist + ',' + (511-fdist) + ',0,0.2)";';
+
+	let bg = 8 - fdist / 60;
+	if( bg < 0) bg = 0; if( bg > 8 ) bg = 8;
+	if( docolor ) ret += 'STYLE="color:var(--' + ((bg >= 3 ) ? 'dark' : 'light' ) + ');' +
+		'text-shadow: 1px 1px 2px ' + ((bg < 3 ) ? '#000' : '#fff' ) + ',' +
+		'-1px 1px 2px ' + ((bg < 3 ) ? '#000' : '#fff' ) + ',' +
+		'1px -1px 2px ' + ((bg < 3 ) ? '#000' : '#fff' ) + ',' +
+		'-1px -1px 2px ' + ((bg < 3 ) ? '#000' : '#fff' ) + ';' +
+		'background:var(--bg-' + bg.toFixed(0) + ');"';
+		//background-color:rgba(' + fdist + ',' + (511-fdist) + ',0,0.2)";';
 	ret += '>' + extrastr + freq.toFixed(6) + "</TD>";
 	return ret;
 }
@@ -222,7 +232,7 @@ function computeTable()
 	else if( goertzels )
 	{
 		contents +=
-			"<TABLE BORDER=1>" +
+			"<TABLE>" +
 			"<TR><TD>Goertzel</TD></TR>" +
 			"<TR><TD>Goertzel (Inverse)</TD></TR>" +
 			"</TABLE><TEXTAREA ROWS=8 COLS=80 ID=goertzeloutput></TEXTAREA>" +
@@ -410,7 +420,6 @@ function computeTable()
 		contents += "</TABLE>";
 	}
 
-
 	document.getElementById( "TABLE" ).innerHTML = contents;
 }
 
@@ -457,10 +466,9 @@ function onLoad()
 </SCRIPT>
 </HEAD>
 <BODY onLoad="onLoad()">
-
 <TABLE WIDTH=100%>
 <TR>
-<TD COLSPAN=3>
+<TD COLSPAN=2>
 <p>Tool for computing tuning to specific frequencies by use of direct ADC reading at specific timer-controlled rate to "tune" to specific frequencies either by quadrature or differential.</p>
 </TD>
 <TD ROWSPAN=2 VALIGN=TOP HEIGHT=200 WIDTH=100% ID=LiveGraphContainer>
@@ -484,7 +492,6 @@ function onLoad()
 </TABLE>
 </TD>
 <TD VALIGN=TOP ROWSPAN=2>
-
 Live Control:<br>
 <TABLE><TR>
 <TD><INPUT TYPE=SUBMIT onClick="reqConnect()" VALUE="Open Device" ID=connectButton>
@@ -499,17 +506,17 @@ Live Control:<br>
 </TR>
 <tr>
 <td>
-</td><td>
 <div id=GeneralData></DIV>
 <input type=checkbox ID=toggle_adc_buffer onchange='toggleBuffer(this)'>ADC Buffer Enable
 <BR>Pow2 Attenuation: 
 <input id=g_attenuation_pow2 onwheel='attenuationpow2wheel(event, this)' size=3 type=number style="width:3em" value=3><br>
-
 </td>
 </tr>
+<tr><td>
+<DIV STYLE="position:relative">
+<DIV style="margin:0px;top:0px;position:absolute" ID=TABLE></DIV>
+</DIV>
+</td></tr>
 </TABLE>
-
-<DIV ID=TABLE></DIV>
-
 </BODY>
 </HTML>
