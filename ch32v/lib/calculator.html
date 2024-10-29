@@ -2,10 +2,8 @@
 <HTML>
 <HEAD>
 <LINK rel="shortcut icon" href="data:image/x-icon;," type="image/x-icon"> 
+<link rel="stylesheet" type="text/css" href="calculator.css" />
 <META charset="UTF-8"/>
-<STYLE>
-:root { color-scheme: dark; }
-</STYLE>
 <SCRIPT src=webhidcontrol.js></SCRIPT>
 <SCRIPT>
 var darkmode = true;
@@ -227,7 +225,7 @@ function computeTable()
 			"<TABLE BORDER=1>" +
 			"<TR><TD>Goertzel</TD></TR>" +
 			"<TR><TD>Goertzel (Inverse)</TD></TR>" +
-			"</TABLE><TEXTAREA ROWS=8 COLS=120 ID=goertzeloutput></TEXTAREA>" +
+			"</TABLE><TEXTAREA ROWS=8 COLS=80 ID=goertzeloutput></TEXTAREA>" +
 			"<P>Click on a ordinal offset to create the C code needed for that tuning parameter. Clicking will copy-to-clipboard.</P>" +
 			"<P>N Divisor #30 (row 3) is usually pretty good.  And, try to select things near 0.25 / 0.75, and avoid 0.0, 0.5, and 1.0.</P>" +
 			"<P>Goertzel's mode is for the ch32v203</P>";
@@ -336,20 +334,20 @@ function computeTable()
 	else if( goertzel2 )
 	{
 		contents += "</TABLE>";
-		contents += "<TABLE><TR><TD><TEXTAREA ROWS=6 COLS=120 ID=goertzeloutput></TEXTAREA></TD><TD><DIV>";
+		contents += "<TABLE><TR><TD><TEXTAREA ROWS=6 COLS=100 ID=goertzeloutput></TEXTAREA></TD><TD><DIV>";
 
 		// Add widget to control various things, realtime.
 		contents += "<BR>Scroll Wheel Control:<BR>";
-		contents += "<input id=mhzm0 onwheel='mhzm(event, this)' size=1 type=number min=0 max=9 style='width:2em'>";
-		contents += "<input id=mhzm1 onwheel='mhzm(event, this)' size=1 type=number min=0 max=9 style='width:2em'>";
-		contents += "<input id=mhzm2 onwheel='mhzm(event, this)' size=1 type=number min=0 max=9 style='width:2em'>.";
-		contents += "<input id=mhzm3 onwheel='mhzm(event, this)' size=1 type=number min=0 max=9 style='width:2em'>";
-		contents += "<input id=mhzm4 onwheel='mhzm(event, this)' size=1 type=number min=0 max=9 style='width:2em'>";
-		contents += "<input id=mhzm5 onwheel='mhzm(event, this)' size=1 type=number min=0 max=9 style='width:2em'>,";
-		contents += "<input id=mhzm6 onwheel='mhzm(event, this)' size=1 type=number min=0 max=9 style='width:2em'>";
-		contents += "<input id=mhzm7 onwheel='mhzm(event, this)' size=1 type=number min=0 max=9 style='width:2em'>";
-		contents += "<input id=mhzm8 onwheel='mhzm(event, this)' size=1 type=number min=0 max=9 style='width:2em'>,";
-		contents += "<input id=mhzm9 onwheel='mhzm(event, this)' size=1 type=number min=0 max=9 style='width:2em'>";
+		contents += "<input id=mhzm0 onwheel='mhzm(event, this)' size=1 type=number min=0 max=9 class='scrollwheel_tune'>";
+		contents += "<input id=mhzm1 onwheel='mhzm(event, this)' size=1 type=number min=0 max=9 class='scrollwheel_tune'>";
+		contents += "<input id=mhzm2 onwheel='mhzm(event, this)' size=1 type=number min=0 max=9 class='scrollwheel_tune'>.";
+		contents += "<input id=mhzm3 onwheel='mhzm(event, this)' size=1 type=number min=0 max=9 class='scrollwheel_tune'>";
+		contents += "<input id=mhzm4 onwheel='mhzm(event, this)' size=1 type=number min=0 max=9 class='scrollwheel_tune'>";
+		contents += "<input id=mhzm5 onwheel='mhzm(event, this)' size=1 type=number min=0 max=9 class='scrollwheel_tune'>,";
+		contents += "<input id=mhzm6 onwheel='mhzm(event, this)' size=1 type=number min=0 max=9 class='scrollwheel_tune'>";
+		contents += "<input id=mhzm7 onwheel='mhzm(event, this)' size=1 type=number min=0 max=9 class='scrollwheel_tune'>";
+		contents += "<input id=mhzm8 onwheel='mhzm(event, this)' size=1 type=number min=0 max=9 class='scrollwheel_tune'>,";
+		contents += "<input id=mhzm9 onwheel='mhzm(event, this)' size=1 type=number min=0 max=9 class='scrollwheel_tune'>";
 		contents += "</DIV></TD></TR></TABLE><BR>";
 		contents += "v Click in this row; <TABLE BORDER=1>";
 		contents += '<TR><TH>d\\h</div></TH>';
@@ -465,26 +463,27 @@ function onLoad()
 <TD COLSPAN=3>
 <p>Tool for computing tuning to specific frequencies by use of direct ADC reading at specific timer-controlled rate to "tune" to specific frequencies either by quadrature or differential.</p>
 </TD>
-<TD ROWSPAN=2 VALIGN=TOP WIDTH=100% ID=LiveGraphContainer>
+<TD ROWSPAN=2 VALIGN=TOP HEIGHT=200 WIDTH=100% ID=LiveGraphContainer>
+
 <CANVAS WIDTH=100% HEIGHT=200 ID=LiveGraph> </CANVAS>
 </TD>
 </TR>
 <TR>
-<TD VALIGN=TOP>
-<TABLE WIDTH=480>
+<TD VALIGN=TOP ROWSPAN=2>
+<TABLE WIDTH=380>
 <TR><TD>System Rate MHz</TD><TD><INPUT ID=crystalmhz VALUE=288></TD></TR>
 <TR><TD>Target MHz</TD><TD><INPUT ID=targetmhz VALUE=27.019360></TD></TR>
-<TR><TD>Quanta</TD><TD><INPUT ID=quanta VALUE=1024> (Goertzel's Only)</TD></TR>
-<TR><TD>Quanta Search Range</TD><TD><INPUT ID=quantasearch VALUE=64> (Goertzel's Only)</TD></TR>
+<TR><TD>Quanta</TD><TD><INPUT ID=quanta VALUE=1024></TD></TR>
+<TR><TD>Quanta Search Range</TD><TD><INPUT ID=quantasearch VALUE=64></TD></TR>
 <TR><TD>Table Type</TD><TD>
-	<INPUT TYPE=RADIO ID=QUADRATURE NAME=computetype>Quadrature</INPUT>
-	<INPUT TYPE=RADIO ID=GOERTZELS NAME=computetype>Goertzels</INPUT>
+	<INPUT TYPE=RADIO ID=QUADRATURE NAME=computetype>Quadrature</INPUT><br>
+	<INPUT TYPE=RADIO ID=GOERTZELS NAME=computetype>Goertzels</INPUT><br>
 	<INPUT TYPE=RADIO ID=GOERTZEL2 NAME=computetype checked>Goertzel (unalign)</INPUT>
 </TD></TR>
 <TR><TD COLSPAN=2><INPUT TYPE=SUBMIT VALUE="Compute" ONCLICK="computeTable()"></TD></TR>
 </TABLE>
 </TD>
-<TD VALIGN=TOP>
+<TD VALIGN=TOP ROWSPAN=2>
 
 Live Control:<br>
 <TABLE><TR>
@@ -495,14 +494,20 @@ Live Control:<br>
 </TR></TABLE>
 <DIV ID="StatusPerf"></DIV>
 </TD>
-
+<TD>
 </TD>
 </TR>
-</TABLE>
+<tr>
+<td>
+</td><td>
 <div id=GeneralData></DIV>
-<input type=checkbox ID=toggle_adc_buffer onchange='toggleBuffer(this)'><label for=toggle_buffer>ADC Buffer Enable</label>
+<input type=checkbox ID=toggle_adc_buffer onchange='toggleBuffer(this)'>ADC Buffer Enable
 <BR>Pow2 Attenuation: 
 <input id=g_attenuation_pow2 onwheel='attenuationpow2wheel(event, this)' size=3 type=number style="width:3em" value=3><br>
+
+</td>
+</tr>
+</TABLE>
 
 <DIV ID=TABLE></DIV>
 

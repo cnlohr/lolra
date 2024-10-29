@@ -1,0 +1,315 @@
+/*
+Copyright (c) 2024 by Brett Schwickerath (https://codepen.io/schwiiiii/pen/wvVqLmX)
+Modified
+Copyright (c) 2024 by cnlohr
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this
+software and associated documentation files (the "Software"), to deal in the
+Software without restriction, including without limitation the rights to use, copy,
+modify, merge, publish, distribute, sublicense, and/or sell copies of the Software,
+and to permit persons to whom the Software is furnished to do so, subject to the
+following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
+INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+*/
+
+@font-face {
+    font-family: 'AudioLink';
+    src: url('AudioLinkMono-Bold.ttf')  format('truetype')
+}
+
+@property --dark {
+	syntax: "<color>";
+	inherits: true;
+	initial-value: #111;
+}
+
+@property --light {
+	syntax: "<color>";
+	inherits: true;
+	initial-value: white;
+}
+
+:root {
+	color-scheme: dark;
+	--gl: radial-gradient(circle 1px at 0px 0px, var(--light) 1px, transparent 0);
+	--gd: radial-gradient(circle 1px at 0px 0px, var(--dark) 1px, transparent 0);
+	--bg-0: var(--dark);
+	--bg-1: var(--gl) 0px 0px / 4px 4px, var(--dark);
+	--bg-2: var(--gl) 0px 0px / 4px 4px, var(--gl) 2px 2px / 4px 4px, var(--dark);
+	--bg-3: var(--gl) 0px 0px / 2px 2px, var(--dark);
+	--bg-4: var(--gl) 0px 0px / 2px 2px, var(--gl) 1px 1px / 2px 2px, var(--dark);
+	--bg-5: var(--gd) 0px 0px / 2px 2px, var(--light);
+	--bg-6: var(--gd) 0px 0px / 4px 4px, var(--gd) 2px 2px / 4px 4px, var(--light);
+	--bg-7: var(--gd) 0px 0px / 4px 4px, var(--light);
+	--bg-8: var(--light);
+	
+	--l-shadow:
+		-1px -1px 0 var(--dark),
+		0 -1px 0 var(--dark),
+		1px -1px 0 var(--dark),
+		1px 0 0 var(--dark),
+		1px 1px 0 var(--dark),
+		0 1px 0 var(--dark),
+		-1px 1px 0 var(--dark),
+		-1px 0 0 var(--dark);
+	
+	--d-shadow:
+		-1px -1px 0 var(--light),
+		0 -1px 0 var(--light),
+		1px -1px 0 var(--light),
+		1px 0 0 var(--light),
+		1px 1px 0 var(--light),
+		0 1px 0 var(--light),
+		-1px 1px 0 var(--light),
+		-1px 0 0 var(--light);
+	
+	--drop-shadow:
+		drop-shadow(-1px -1px 0 var(--light))
+		drop-shadow(0 -1px 0 var(--light))
+		drop-shadow(1px -1px 0 var(--light))
+		drop-shadow(1px 0 0 var(--light))
+		drop-shadow(1px 1px 0 var(--light))
+		drop-shadow(0 1px 0 var(--light))
+		drop-shadow(-1px 1px 0 var(--light))
+		drop-shadow(-1px 0 0 var(--light));
+}
+
+* {
+	box-sizing: border-box;
+	font-family: "AudioLink", monospace;
+	text-rendering: optimizeSpeed;
+	font-size: inherit;
+	color: light-dark(var(--dark), var(--light));
+}
+
+html {
+	/*font-size: 1vmin;*/
+	/* animation:
+		adjust-light 17s linear infinite both,
+		adjust-dark 11s linear infinite both; */
+}
+
+body {
+	margin: 0;
+	min-height: 100vh;
+	display: flex;
+	flex-direction: column;
+	/*
+	justify-content: center;
+	align-items: center;
+	*/
+	gap: 4rem;
+	background: var(--dark);
+}
+
+.shades {
+	display: inline-flex;
+	gap: 1rem;
+}
+
+.shade {
+	height: calc(80rem / 9);
+	width: calc(80rem / 9);
+	border-radius: 50%;
+	border: 3px solid var(--light);
+	
+	&:nth-child(1) { background: var(--bg-0); }
+	&:nth-child(2) { background: var(--bg-1); }
+	&:nth-child(3) { background: var(--bg-2); }
+	&:nth-child(4) { background: var(--bg-3); }
+	&:nth-child(5) { background: var(--bg-4); }
+	&:nth-child(6) { background: var(--bg-5); }
+	&:nth-child(7) { background: var(--bg-6); }
+	&:nth-child(8) { background: var(--bg-7); }
+	&:nth-child(9) { background: var(--bg-8); }
+}
+
+form {
+	font-size: 2rem;
+	background: var(--bg-4);
+	padding: 2rem;
+	border-radius: 2rem;
+	display: flex;
+	flex-direction: column;
+	gap: 1rem;
+	border: 3px var(--light) solid;
+}
+
+label {
+	background: var(--bg-1);
+	display: flex;
+	flex-direction: column;
+	gap: .5rem;
+	padding: 1rem;
+	border-radius: 1rem;
+	text-shadow: var(--l-shadow);
+	border: 1px var(--light) solid;
+	color: var(--light);
+}
+
+
+input::-webkit-outer-spin-button,
+input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+}
+
+/*.scrollwheel_tune{*/
+input[type=number] {
+	background: var(--bg-0);
+	outline: 0;
+	/*text-indent: 12px;*/
+	padding-top: 1rem;
+	padding-bottom: 1rem;
+	padding-left: 1.1rem;
+	padding-right: 1.0rem;
+	text-shadow: var(--l-shadow);
+	border: 1px var(--light) solid;
+	animation: dark-to-light 200ms ease-out forwards;
+	transition: 200ms ease-out;
+	border-radius: 1.5rem;
+	&:hover {
+		animation: light-to-dark 200ms linear forwards;
+		color: var(--dark);
+		text-shadow: var(--d-shadow);
+	}
+}
+
+
+textarea,input:not([type='number']) {
+	background: var(--bg-0);
+	border: 0;
+	overflow:hidden;
+	outline: 0;
+	border-radius: .8rem;
+	padding: .5rem;
+	text-shadow: var(--l-shadow);
+	border: 1px var(--light) solid;
+	animation: dark-to-light 200ms ease-out forwards;
+	transition: 200ms ease-out;
+
+	&:hover {
+		animation: light-to-dark 200ms linear forwards;
+		color: var(--dark);
+		text-shadow: var(--d-shadow);
+	}
+}
+
+button, input[type=submit] {
+	background: var(--bg-0);
+	border: 0;
+	outline: 0;
+	border-radius: 2rem;
+	padding: .7rem;
+	font-weight: bold;
+	text-shadow: var(--l-shadow);
+	cursor: pointer;
+	border: 1px var(--light) solid;
+	color: var(--light);
+	animation: dark-to-light 200ms ease-out forwards;
+	transition: 200ms ease-out;
+	
+	&:hover {
+		animation: light-to-dark 200ms linear forwards;
+		color: var(--dark);
+		text-shadow: var(--d-shadow);
+	}
+}
+
+.cube-wrapper {
+	--size: 8rem;
+	margin-top: 2rem;
+	perspective: 200px;
+	perspective-origin: 50% 0%;
+	filter: var(--drop-shadow);
+}
+
+.cube {
+	height: var(--size);
+	width: var(--size);
+	position: relative;
+	transform-style: preserve-3d;
+	transform-origin: 50% 50% calc(var(--size) * .5);
+	animation: rotate 10s linear infinite;
+}
+
+.face {
+	position: absolute;
+	height: var(--size);
+	width: var(--size);
+	transform-style: preserve-3d;
+	transform-origin: 50% 50% calc(var(--size) * .5);
+	
+	&:nth-child(1) { transform: rotateY(90deg); background: var(--bg-2); }
+	&:nth-child(2) { transform: rotateY(180deg); background: var(--bg-3) }
+	&:nth-child(3) { transform: rotateY(-90deg); background: var(--bg-4) }
+	&:nth-child(4) { transform: rotateX(90deg); background: var(--bg-5) }
+	&:nth-child(5) { transform: rotateX(-90deg); background: var(--bg-6) }
+	&:nth-child(6) { background: var(--bg-7) }
+}
+
+@keyframes light-to-dark {
+	0% { background: var(--bg-0); }
+	12.5% { background: var(--bg-1); }
+	25% { background: var(--bg-2); }
+	37.5% { background: var(--bg-3); }
+	50% { background: var(--bg-4); }
+	62.5% { background: var(--bg-5); }
+	75% { background: var(--bg-6); }
+	87.5% { background: var(--bg-7); }
+	100% { background: var(--bg-8); }
+}
+
+@keyframes dark-to-light {
+	0% { background: var(--bg-8); }
+	12.5% { background: var(--bg-7); }
+	25% { background: var(--bg-6); }
+	37.5% { background: var(--bg-5); }
+	50% { background: var(--bg-4); }
+	62.5% { background: var(--bg-3); }
+	75% { background: var(--bg-2); }
+	87.5% { background: var(--bg-1); }
+	100% { background: var(--bg-0); }
+}
+
+@keyframes rotate {
+	from { transform: rotateY(0) rotateX(1turn) rotateZ(0) }
+	to { transform: rotateY(1turn) rotateX(0) rotateZ(1turn) }
+}
+
+@keyframes adjust-dark {
+	0% { --dark: hsl(0turn, 100%, 80%); }
+	10% { --dark: hsl(.1turn, 100%, 80%); }
+	20% { --dark: hsl(.2turn, 100%, 80%); }
+	30% { --dark: hsl(.3turn, 100%, 80%); }
+	40% { --dark: hsl(.4turn, 100%, 80%); }
+	50% { --dark: hsl(.5turn, 100%, 80%); }
+	60% { --dark: hsl(.6turn, 100%, 80%); }
+	70% { --dark: hsl(.7turn, 100%, 80%); }
+	80% { --dark: hsl(.8turn, 100%, 80%); }
+	90% { --dark: hsl(.9turn, 100%, 80%); }
+	100% { --dark: hsl(1turn, 100%, 80%); }
+}
+
+@keyframes adjust-light {
+	0% { --light: hsl(0turn, 100%, 20%); }
+	10% { --light: hsl(.1turn, 100%, 20%); }
+	20% { --light: hsl(.2turn, 100%, 20%); }
+	30% { --light: hsl(.3turn, 100%, 20%); }
+	40% { --light: hsl(.4turn, 100%, 20%); }
+	50% { --light: hsl(.5turn, 100%, 20%); }
+	60% { --light: hsl(.6turn, 100%, 20%); }
+	70% { --light: hsl(.7turn, 100%, 20%); }
+	80% { --light: hsl(.8turn, 100%, 20%); }
+	90% { --light: hsl(.9turn, 100%, 20%); }
+	100% { --light: hsl(1turn, 100%, 20%); }
+}
+
