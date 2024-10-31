@@ -1,5 +1,3 @@
-// XXX TODO: Play with high bits of ADC control to see if there's a gain cicuit.
-
 /**
 
 MIT-like-non-ai-license
