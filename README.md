@@ -16,20 +16,18 @@ If you are looking for the Hackaday 2024 microcontroller radio talk, you can <a 
    * [Range Tests](#range-tests)
 
 > [!NOTE]
-> 1. This repo and many of the RF-specific files within are under an NON-AI license, and should not be included directly in other projects. **This repo is for educational purposes only and not intended to become a library**
+> 1. Portions of code in this repo are under various licenses and cannot be trivially incorporated into other libraries, including some files containing a no-ai-training license for any of the RF-specific portions of the project. Be cautious when using code from this repo. See ![LICENSE](LICENSE) for more information.
 > 2. The LoRa® and LoRaWAN® Mark and LoRa Logo are trademarks of Semtech Corporation.
 > 3. LoLRa is not associated with Semtech in any way whatsoever.
+> 4. This repo is designed for use with ITU Region 2 (The Americas) targeting 902-928MHz. Code changes are needed for use in Region 1 (EU, Russia, Africa) to target 863-870MHz or Region 3 (Australia, China, India) to target 920-923MHz.
+
+> [!CAUTION]
+> Because we rely on harmonics and aliasing, the primary frequency components emitted by your microcontroller are going to be in portions of the RF spectrum where RF transmissions are banned.  Please filter your output or perform your tests in an area where you are unlikely to leak significant RF.  The overall EIRP output is genreally ≪300uW across the whole spectrum spread out over hundreds of emission frequencies, but there is virtually no way a device deliberately transmitting on these frequencies could ever pass FCC part 15 compliance, even with filtering. 
 
 
 ## Introduction and Repo Overview
 
 I have always been fascinated with sending and receiving radio signals from microcontrollers that don't have dedicated radio hardware.  This repo serves as a overview of many of the projects I've done to do this decoding, along with example code (Though some of it is restrictively licensed)
-
-> [!NOTE]
-> This repo is designed for use with ITU Region 2 (The Americas) targeting 902-928MHz. Code changes are needed for use in Region 1 (EU, Russia, Africa) to target 863-870MHz or Region 3 (Australia, China, India) to target 920-923MHz.
-
-> [!CAUTION]
-> Because we rely on harmonics and aliasing, the primary frequency components emitted by your microcontroller are going to be in portions of the RF spectrum where RF transmissions are banned.  Please filter your output or perform your tests in an area where you are unlikely to leak significant RF.  The overall EIRP output is genreally ≪300uW across the whole spectrum spread out over hundreds of emission frequencies, but there is virtually no way a device deliberately transmitting on these frequencies could ever pass FCC part 15 compliance, even with filtering. 
 
 In general the repo is split up in to many projects, but categoriezed by device type.
 
@@ -78,9 +76,6 @@ There are two major modes that this repository works with.
 Click Below for the Youtube Video version of this page:
 
 [![LoRa Without A Radio](https://i3.ytimg.com/vi/eIdHBDSQHyw/maxresdefault.jpg)](https://www.youtube.com/watch?v=eIdHBDSQHyw)
-
-> [!NOTE]
-> Portions of code in this repo are under various licenses and cannot be trivially incorporated into other libraries without a bit of a mess, including a no-ai-training license for any of the RF-specific portions of the project. Be cautious when using code from this repo. See ![LICENSE](LICENSE) for more information.
 
 ## Background
 
