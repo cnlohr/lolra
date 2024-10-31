@@ -1,6 +1,6 @@
 # LoLRa
 
-Transmit 900MHz LoRa frames surprisingly far without a radio (And other radio shenanigans using ADCs, PWMs and I2S/SPI busses.)
+Transmit 900MHz LoRa frames surprisingly far without a radio (And other radio shenanigans using ADCs, PWMs and I2S/SPI busses) including sending other RF data, as well as receiving RF signals (Though admittedly not a LoRa receiver).
 
 If you are looking for the Hackaday 2024 microcontroller radio talk, you can <a href=https://cnlohr.github.io/lolra_talk>click here</a>.
 
@@ -34,34 +34,34 @@ In general the repo is split up in to many projects, but categoriezed by device 
  * ch32v (Note, all examples require 8MHz (v203) or 24Mhz (v003) crystal oscillator)
    * General Note: All OLED displays used here are 128x128 SPI-mode OLED displays.
    * [ch32v003-adcrx](ch32v/ch32v003-adcrx) - prints quadrature values for receiving at 1/4 sample rate signals, or harmonics thereof.  Specifically this is tuned to receiv CW on citizen band frequencies, specifically 27.000050 MHz
-   * ch32v003-lora - Successful (but very poor) transmission of LoRa messages with a ch32v003.
-   * ch32v003-timer - An attempt to use non-tabled dithering of PWM signals to send FM radio and/or 315MHz signals.  *This does not work well* but it is included as a reference for dtrying to dither RF on the 003. 
-   * ch32v003-txrx - Trying to send from one 003 to another 003 receiving.  This does not work well - only about 1'.
-   * ch32v203-adcrx - Very basic quadrature decoding on a ch32v203.
-   * ch32v203-fft - Perform an FFT on a small window of samples on a ch32v203.  This outputs to an OLED display.  It doesn't keep up in realtime though.  It also relies on <a href=https://gist.github.com/cnlohr/c4f9647a220781c005ff1a733dc9ed7f>fix_fft.h</a> (which cannot be distirbuted with this project because of a lack of license.
-   * **ch32v203-goertzel** - Perform a full goertzel's tuning on an incoming ADC signal so that it can listen to multiple AM and NBFM radio stations from an ADC pin.
-     * lib/calculator.html - webpage that can use webhid with ch32v203-goertzel.
-   * **ch32v203-lora** - Proper transmission of LoRaWAN packets (from the tests outlined below).
-   * ch32v203-tx - Very basic test, setup to just turn on a PWM on the ch32v203.
+   * [ch32v003-lora](ch32v/ch32v003-lora) - Successful (but very poor) transmission of LoRa messages with a ch32v003.
+   * [ch32v003-timer](ch32v/ch32v003-timer) - An attempt to use non-tabled dithering of PWM signals to send FM radio and/or 315MHz signals.  *This does not work well* but it is included as a reference for dtrying to dither RF on the 003. 
+   * [ch32v003-txrx](ch32v/ch32v003-txrx) - Trying to send from one 003 to another 003 receiving.  This does not work well - only about 1'.
+   * [ch32v203-adcrx](ch32v203-adcrx) - Very basic quadrature decoding on a ch32v203.
+   * [ch32v203-fft](ch32v203-fft) - Perform an FFT on a small window of samples on a ch32v203.  This outputs to an OLED display.  It doesn't keep up in realtime though.  It also relies on <a href=https://gist.github.com/cnlohr/c4f9647a220781c005ff1a733dc9ed7f>fix_fft.h</a> (which cannot be distirbuted with this project because of a lack of license.
+   * [**ch32v203-goertzel**](ch32v/ch32v203-goertzel) - Perform a full goertzel's tuning on an incoming ADC signal so that it can listen to multiple AM and NBFM radio stations from an ADC pin.
+     * [lib/calculator.html](ch32v/lib/calculator.html) - webpage that can use webhid with ch32v203-goertzel.
+   * [**ch32v203-lora**](ch32v/ch32v203-lora) - Proper transmission of LoRaWAN packets (from the tests outlined below).
+   * [ch32v203-tx](ch32v/ch32v203-tx) - Very basic test, setup to just turn on a PWM on the ch32v203.
  * esp32-s2
-   * **loratest** - Full stack protocol for sending LoRa messages from an esp32-s2. (From range test)
-   * **narrow_fsk_test** - Very basic test using dithering and the PLL in the esp32-s2 to see how tight/narrow control is possible with the esp32-s2.  This does not do a dithered closed loop, but would not be terribly hard to add.
-   * **videoending** - Mechanism for allowing an ESP32-S2 to FSK, hopping around to draw a picture in a spectrogram.  This was used for the video ending.
+   * [**loratest**](esp32-s2/loratest) - Full stack protocol for sending LoRa messages from an esp32-s2. (From range test)
+   * [**narrow_fsk_test**](esp32-s2/narrow_fsk_test) - Very basic test using dithering and the PLL in the esp32-s2 to see how tight/narrow control is possible with the esp32-s2.  This does not do a dithered closed loop, but would not be terribly hard to add.
+   * [**videoending**](esp32-s2/videoending) - Mechanism for allowing an ESP32-S2 to FSK, hopping around to draw a picture in a spectrogram.  This was used for the video ending.
  * esp8266
-   * example_125k_raw - Sending a raw 125kHz wide LoRa message.
-   * example_500k_raw - Sending a raw 500kHz wide LoRa message.
-   * **lorawan_example** - Using the I2S bus on the ESP8266 to send a full-stack LoRaWAN message to the things network.
-   * non_lora_310_transmit - Exmaple of how to transmit 310MHz OOK with an ESP8266.
+   * [example_125k_raw](esp8266/example_125k_raw) - Sending a raw 125kHz wide LoRa message.
+   * [example_500k_raw](esp8266/example_500k_raw) - Sending a raw 500kHz wide LoRa message.
+   * [**lorawan_example**](esp8266/lorawan_example) - Using the I2S bus on the ESP8266 to send a full-stack LoRaWAN message to the things network.
+   * [non_lora_310_transmit](esp8266/non_lora_310_transmit) - Exmaple of how to transmit 310MHz OOK with an ESP8266.
  * lib
-   * aes-cbc-cmac.h - Public Domain RFC4493 AES-CMAC header only library.
-   * LoRa-SDR-Code.h - MIT (unrestrictive) Licensed code to construct LoRa packets
-   * lorawan_simple.h - MIT (unrestrictive) Licensed code to construct LoRaWAN packets.
-   * rf_data_gen.h - Helper function for helping generate bit tables for I2S/SPI outpiut of carefully crafted signals.
-   * tiny-AES-c.h - Public Domain AES encryption/decryption library.
+   * [aes-cbc-cmac.h](lib/aes-cbc-cmac.h) - Public Domain RFC4493 AES-CMAC header only library.
+   * [LoRa-SDR-Code.h](lib/LoRa-SDR-Code.h) - MIT (unrestrictive) Licensed code to construct LoRa packets
+   * [lorawan_simple.h](lib/lorawan_simple.h) - MIT (unrestrictive) Licensed code to construct LoRaWAN packets.
+   * [rf_data_gen.h](lib/rf_data_gen.h) - Helper function for helping generate bit tables for I2S/SPI outpiut of carefully crafted signals.
+   * [tiny-AES-c.h](lib/rf_data_gen.h) - Public Domain AES encryption/decryption library.
  * tools
-   * 60-rtlsdr.rules - Make it so you can use your airspy from Linux as a user.
-   * complex_magsink_to_image.c
-   * testloradec.grc - Using gr_lora exmaple to decode LoRa in GNURadio
+   * [60-rtlsdr.rules](tools/60-rtlsdr.rules) - Make it so you can use your airspy from Linux as a user.
+   * [complex_magsink_to_image.c](tools/complex_magsink_to_image.c) - Generate ultra high resolution (in time domain) waterfall views.
+   * [testloradec.grc](tools/testloradec.grc) - Using gr_lora exmaple to decode LoRa in GNURadio
 
 ## Introduction (LoRa)
 
