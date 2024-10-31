@@ -6,7 +6,7 @@ If you are looking for the Hackaday 2024 microcontroller radio talk, you can <a 
 
  * [Introduct and repo overview](#introduction-and-repo-overview)
  * LoRa
-   * [Introduction (LoRa)](#introduction-LoRa)
+   * [Introduction (LoRa)](#introduction-lora)
    * [Background](#background)
    * [LoRaWAN](#lorawan)
    * [Limitations](#limitations)
@@ -33,7 +33,7 @@ In general the repo is split up in to many projects, but categoriezed by device 
 
  * ch32v (Note, all examples require 8MHz (v203) or 24Mhz (v003) crystal oscillator)
    * General Note: All OLED displays used here are 128x128 SPI-mode OLED displays.
-   * ch32v003-adcrx - prints quadrature values for receiving at 1/4 sample rate signals, or harmonics thereof.  Specifically this is tuned to receiv CW on citizen band frequencies, specifically 27.000050 MHz
+   * [ch32v003-adcrx](ch32v/ch32v003-adcrx) - prints quadrature values for receiving at 1/4 sample rate signals, or harmonics thereof.  Specifically this is tuned to receiv CW on citizen band frequencies, specifically 27.000050 MHz
    * ch32v003-lora - Successful (but very poor) transmission of LoRa messages with a ch32v003.
    * ch32v003-timer - An attempt to use non-tabled dithering of PWM signals to send FM radio and/or 315MHz signals.  *This does not work well* but it is included as a reference for dtrying to dither RF on the 003. 
    * ch32v003-txrx - Trying to send from one 003 to another 003 receiving.  This does not work well - only about 1'.
