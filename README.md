@@ -4,7 +4,7 @@ Transmit 900MHz LoRa frames surprisingly far without a radio (And other radio sh
 
 If you are looking for the Hackaday 2024 microcontroller radio talk, you can <a href=https://cnlohr.github.io/lolra_talk>click here</a>.
 
-If you are looking for LoLRa Merch (Like t-shirts, etc.), <a href=https://cnlohr-shop.fourthwall.com/?source=dashboard>click here</a>.
+If you are looking for LoLRa Merch (Like t-shirts, etc.), <a href="https://cnlohr-shop.fourthwall.com/?source=dashboard">click here</a>.
 
  * [Introduct and repo overview](#introduction-and-repo-overview)
  * LoRa
