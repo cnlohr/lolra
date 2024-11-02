@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+
+<!-- This file is under the regular MIT license. 
+
+Copyright 2024 Charles Lohr (cnlohr)
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the “Software”), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+-->
+
+<HTML>
+<HEAD>
+<LINK rel="shortcut icon" href="data:image/x-icon;," type="image/x-icon"> 
+<link rel="stylesheet" type="text/css" href="calculator.css" />
+<META charset="UTF-8"/>
+<SCRIPT src=webhidcontrol.js></SCRIPT>
+<SCRIPT>
+var darkmode = true;
+
+//body { background-color: Canvas; color: CanvasText; }
+
+function DrawSpan( rowspan, colspan, freq, target, docolor, extrastr = "" )
+{
+	var fdist = Math.abs( freq - target );
+	fdist = Math.pow( fdist, 0.5 ) * 300;
+	if( fdist > 511 ) fdist = 511;
+
+	let ret = "<TD COLSPAN=" + colspan + ' ROWSPAN' + rowspan + ' ';
+
+	let bg = 8 - fdist / 60;
+	if( bg < 0) bg = 0; if( bg > 8 ) bg = 8;
+	if( docolor ) ret += 'STYLE="color:var(--' + ((bg >= 3 ) ? 'dark' : 'light' ) + ');' +
+		'text-shadow: 1px 1px 2px ' + ((bg < 3 ) ? '#000' : '#fff' ) + ',' +
+		'-1px 1px 2px ' + ((bg < 3 ) ? '#000' : '#fff' ) + ',' +
+		'1px -1px 2px ' + ((bg < 3 ) ? '#000' : '#fff' ) + ',' +
+		'-1px -1px 2px ' + ((bg < 3 ) ? '#000' : '#fff' ) + ';' +
+		'background:var(--bg-' + bg.toFixed(0) + ');"';
+		//background-color:rgba(' + fdist + ',' + (511-fdist) + ',0,0.2)";';
+	ret += '>' + extrastr + freq.toFixed(6) + "</TD>";
+	return ret;
+}
+
+var system_rate = 288000000; // in MHz for effective ADC (note: This can be 2x normal clock if in dual ADC mode)
+var lastGn;
+var lastGmhz;
+var lastGfr;
+var lastGbrf;
+var lastGexact;
+var lastTargetMHz;
+
+function Goertz( n, mhz, fr, brf, exact_compute, targetmhz )
+{
+	lastGn = n;
+	lastGmhz = mhz;
+	lastGfr = fr;
+	lastGbrf = brf;
+	lastGexact = exact_compute;
+	lastTargetMHz = targetmhz;
+	SendGoertz();
+}
+
+function SendGoertz()
+{
+	var n = lastGn;
+	var mhz = lastGmhz;
+	var fr = lastGfr;
+	var brf = lastGbrf;
+	var exact_compute = lastGexact;
+
+	let tau = 3.1415926535*2.0;
+	let omega = fr * tau;
+	var textarea = document.getElementById("goertzeloutput");
+	var g_attenuation_pow2 = Number( document.getElementById( "g_attenuation_pow2" ).value );
+
+	var goertzel_omega_per_sample_real = ( omega*2*(1<<29));
+	var g_goertzel_omega_per_sample = Math.round( goertzel_omega_per_sample_real );
+	var g_goertzel_coefficient = Math.round( (2 * Math.cos( omega ) * (1<<30)) );
+	var g_goertzel_coefficient_s = Math.round( (2 * Math.sin( omega ) * (1<<30)) );
+
+	var omega_per_group = omega * brf;
+	var goertzel_phasor_advance_radians_per_sample = tau * (Math.round( omega_per_group / tau ) - omega_per_group / tau); 
+	var g_goertzel_advance_r = Math.cos( goertzel_phasor_advance_radians_per_sample ) * 32768;
+	var g_goertzel_advance_i = Math.sin( goertzel_phasor_advance_radians_per_sample ) * 32768;
+
+	var g_exactcompute = exact_compute;
+
+	if( textarea )
+	{
+		textarea.value = 
+			"int g_pwm_period = ("+n+"-1); // " + system_rate/lastGn/1000000. + " MHz Samplerate\n" +
+			"int g_exactcompute = ("+exact_compute+");\n" +
+			"int g_goertzel_buffer = ("+brf+");\n" +
+			"int32_t g_goertzel_omega_per_sample = " + g_goertzel_coefficient.toFixed(0) + "; // " + ( omega / (3.1415926535*2.0)).toFixed(6) + " of whole per step / " + mhz.toFixed(6) + "MHz\n" +
+			"int32_t g_goertzel_coefficient = " + g_goertzel_coefficient.toFixed(0) + ";\n" +
+			"int32_t g_goertzel_coefficient_s = " + g_goertzel_coefficient_s.toFixed(0) + ";\n" +
+			"int32_t g_goertzel_advance_r = " + g_goertzel_advance_r.toFixed(0) + ";\n" +
+			"int32_t g_goertzel_advance_i = " + g_goertzel_advance_i.toFixed(0) + ";\n";
+			"int32_t g_attenuation_pow2 = " + g_attenuation_pow2.toFixed(0) + ";\n";
+
+		// Highlight its content
+		textarea.select();
+
+		// Copy the highlighted text
+		document.execCommand("copy");
+
+	}
+
+	updateWebHidDeviceWithParameters( [ 
+		(n-1)|0,
+		brf|0,
+		g_goertzel_omega_per_sample|0,
+		g_goertzel_coefficient|0,
+		g_goertzel_coefficient_s|0,
+		exact_compute|0,
+		g_goertzel_advance_r|0,
+		g_goertzel_advance_i|0,
+		document.getElementById( "toggle_adc_buffer").checked ? 1 : 0,
+		g_attenuation_pow2,
+		 ] );
+
+	// Update toggle control
+	let target = lastTargetMHz;
+	var tz = (target * 10000000.0) + 0.05;
+	for( var i = 0|0; i < 10; i++ )
+	{
+		var tc = (tz / 1000000000.0) % 10;
+		if( document.getElementById( "mhzm" + i ) )
+			document.getElementById( "mhzm" + i ).value = tc|0;
+		tz *= 10;
+	}
+}
+
+function toggleBuffer( ths )
+{
+	SendGoertz();
+}
+
+function attenuationpow2wheel( event, ths )
+{
+	event.preventDefault();
+	let dy = event.deltaY > 0 ? -1 : 1;
+	var thss = Number(ths.value) + dy;
+	if( thss < -9 ) thss = -9;
+	if( thss > 9 ) thss = 9;
+	ths.value = thss;
+	UpdateQuickSettings();
+}
+
+function mhzm( event, ths )
+{
+	event.preventDefault();
+	let dy = event.deltaY > 0 ? -1 : 1;
+	var thss = Number(ths.id.substr(4));
+
+	var hz = 0; // actually tents of hertz
+	for( var i = 0|0; i < 10; i++ )
+	{
+		var dig = Number(document.getElementById( "mhzm" + i ).value);
+		hz += Math.pow( 10, 9-i ) * dig;
+	}
+
+	hz += dy * Math.pow( 10, 9-thss );
+
+	lastGmhz = hz/10000000.0;
+	document.getElementById("targetmhz").value = lastGmhz;
+	UpdateQuickSettings();
+}
+
+function UpdateQuickSettings()
+{
+	let xtal = Number(document.getElementById("crystalmhz").value );
+	let target = Number(document.getElementById("targetmhz").value );
+	let quadrature = document.getElementById("QUADRATURE").checked;
+	let goertzels = document.getElementById("GOERTZELS").checked;
+	let goertzel2 = document.getElementById("GOERTZEL2").checked;
+	let quanta = Math.round(Number(document.getElementById("quanta").value));
+	let quantasearch = Math.round(Number(document.getElementById("quantasearch").value));
+	SaveDefaults();
+	system_rate = xtal *1000000;
+
+	let n = lastGn;
+	let freq = ( xtal / n );
+	let goertzelpoint = 0;
+	let goertzelpointinv = 0;
+	let tgoertzelp = 0;
+	let tgoertzelpi = 0;
+	let quantaA = 0;
+	let quantaINV = 0;
+
+	let h = 1;
+
+	let tquanta = (quanta&0xffffc);
+	let base = freq * h;
+	let next = freq * (h+1);
+
+
+	let tgoertzelpoint = tquanta;
+	tgoertzelpoint = ( target - base ) / ( next - base );
+	tgoertzelpoint = ((tgoertzelpoint%1)+1)%1;
+
+	quantaA = tquanta;
+	tgoertzelp = h;
+	Goertz( n, freq * (h+tgoertzelpoint), (tgoertzelpoint), quantaA , 1, target);
+	return false;
+}
+
+function computeTable()
+{
+	let xtal = Number(document.getElementById("crystalmhz").value );
+	let target = Number(document.getElementById("targetmhz").value );
+	let quadrature = document.getElementById("QUADRATURE").checked;
+	let goertzels = document.getElementById("GOERTZELS").checked;
+	let goertzel2 = document.getElementById("GOERTZEL2").checked;
+	let quanta = Math.round(Number(document.getElementById("quanta").value));
+	let quantasearch = Math.round(Number(document.getElementById("quantasearch").value));
+ 	SaveDefaults();
+
+	const max_harmonics = 28|0;
+	const min_harmonics = (quadrature?1:0)|0;
+
+	let contents = "";
+
+	if( quadrature )
+	{
+		contents += "<TABLE>" +
+			"<TR><TD>Quadrature:</TD></TR>" +
+			"<TR><TD>I = + + - -</TD></TR>" +
+			"<TR><TD>Q = + - - +</TD></TR>" +
+			"<TR><TD>Differntial:</TD></TR>" +
+			"<TR><TD>V = + - + -</TD></TR>" +
+			"<TR><TD>You choose the mode you operate in, either Quadrature or differential</TD></TR>" +
+			"</TABLE>" +
+			"<p> Table shows: </P>" +
+			"<TABLE BORDER=1>" +
+			"<TR><TD>Sample Frequency Harmonic</TD></TR>" +
+			"<TR><TD>Lower Quadrature Frequency</TD></TR>" +
+			"<TR><TD>Upper Quadrature Frequency</TD></TR>" +
+			"<TR><TD>Differential Frequency</TD></TR>" +
+			"</TABLE>";
+	}
+	else if( goertzels )
+	{
+		contents +=
+			"<TABLE>" +
+			"<TR><TD>Goertzel</TD></TR>" +
+			"<TR><TD>Goertzel (Inverse)</TD></TR>" +
+			"</TABLE><TEXTAREA ROWS=8 COLS=80 ID=goertzeloutput></TEXTAREA>" +
+			"<P>Click on a ordinal offset to create the C code needed for that tuning parameter. Clicking will copy-to-clipboard.</P>" +
+			"<P>N Divisor #30 (row 3) is usually pretty good.  And, try to select things near 0.25 / 0.75, and avoid 0.0, 0.5, and 1.0.</P>" +
+			"<P>Goertzel's mode is for the ch32v203</P>";
+	}
+
+	if( goertzels || quadrature )
+	{
+		contents += "<BR>Scroll Wheel Control:<BR>";
+		contents += "<TABLE BORDER=1>";
+		contents += '<TR><TH>d\\h</div></TH>';
+		for( let h = 0|min_harmonics; h <= max_harmonics; h++ )
+		{
+			contents += "<TH COLSPAN=2>" + h + "</TH>";
+		}
+
+		for( let n = 0|28; n <= 66; n++ )
+		{
+			let freq = ( xtal / n );
+			let goertzelpoint = 0;
+			let goertzelpointinv = 0;
+			let tgoertzelp = 0;
+			let tgoertzelpi = 0;
+			let quantaA = 0;
+			let quantaINV = 0;
+			for( let h = 0|min_harmonics; h <= max_harmonics; h++ )
+			{
+				let base = freq * h;
+				let next = freq * (h+1);
+
+				// Round quanta down to next order-of-4-even
+				for( let tquanta = (quanta&0xffffc) - (quantasearch&0xffffc); tquanta < (quanta&0xffffc) + (quantasearch&0xffffc); tquanta+=4 )
+				{
+					if( target <= next && target >= base )
+					{
+						var t;
+						let tgoertzelpoint = ( target - base ) / ( next - base );
+						tgoertzelpoint = Math.round(tquanta * tgoertzelpoint)/tquanta;
+						if( Math.abs( freq*(h+tgoertzelpoint) - target ) < Math.abs( freq*(h+goertzelpoint) - target ) )
+						{
+							goertzelpoint = tgoertzelpoint;
+							tgoertzelp = h;
+							quantaA = tquanta;
+						}
+
+						let tgoertzelpointinv = (1.0 - ( target - base ) / ( next - base ));
+						tgoertzelpointinv = Math.round(tquanta * tgoertzelpointinv)/tquanta;
+
+						if( Math.abs( freq*(h-tgoertzelpointinv+1) - target ) < Math.abs( freq*(h-goertzelpointinv+1) - target ) )
+						{
+							goertzelpointinv = tgoertzelpointinv;
+							tgoertzelpi = h;
+							quantaINV = tquanta;
+						}
+					}
+				}
+			}
+			contents += "</TR>";
+
+			for( let mode = 0; mode < 4; mode++ )
+			{
+				contents += "<TR>";
+				if( mode == 0 )
+					contents += "<TD ROWSPAN=" + 4 + ">" + n + "</TD>";
+				for( let h = 0|min_harmonics; h <= max_harmonics; h++ )
+				{
+					if( quadrature )
+					{
+						if( mode == 0 )
+							contents += DrawSpan( 1, 2, freq * h, target, false );
+						else if( mode == 1 )
+							contents += DrawSpan( 1, 2, freq * (h-.25), target, true );
+						else if( mode == 2 )
+							contents += DrawSpan( 1, 2, freq * (h+.25), target, true );
+						else if( mode == 3 )
+							contents += DrawSpan( 1, 2, freq * (h+0.5), target, true );
+					}
+					else
+					{
+						if( mode == 0 )
+						{
+							contents += "<TD COLSPAN=2>"
+							if( tgoertzelp == h ) contents += "<INPUT TYPE=SUBMIT ONCLICK='Goertz(" + n + ", " + freq * (h+goertzelpoint) + ", " + (goertzelpoint) + ", " + quantaA + ", 0, " + freq + ")' VALUE='↑" + (goertzelpoint).toFixed(6) + "'/>";
+							contents += "</TD>";
+						}
+						else if( mode == 1 )
+						{
+							contents += DrawSpan( 1, 2, freq * (h+goertzelpoint), target, true );
+						}
+						else if( mode == 2 )
+						{
+							contents += "<TD COLSPAN=2>"
+							if( tgoertzelpi == h-1  ) contents += "<INPUT TYPE=SUBMIT ONCLICK='Goertz(" + n + ", " + freq * (h-goertzelpointinv) + ", " + goertzelpointinv + ", " + quantaINV + ", 0, " + freq + ")' VALUE='↓" + goertzelpointinv.toFixed(6) + "'/>";
+							contents += "</TD>";
+						}
+						else if( mode == 3 )
+						{
+							contents += DrawSpan( 1, 2, freq * (h-goertzelpointinv), target, true );
+						}
+					}
+				}
+				contents += "</TD>";
+			}
+		}
+		contents += "</TABLE>";
+	}
+	else if( goertzel2 )
+	{
+		contents += "</TABLE>";
+		contents += "<TABLE><TR><TD><TEXTAREA ROWS=6 COLS=100 ID=goertzeloutput></TEXTAREA></TD><TD><DIV>";
+
+		// Add widget to control various things, realtime.
+		contents += "<BR>Scroll Wheel Control:<BR>";
+		contents += "<input id=mhzm0 onwheel='mhzm(event, this)' size=1 type=number min=0 max=9 class='scrollwheel_tune'>";
+		contents += "<input id=mhzm1 onwheel='mhzm(event, this)' size=1 type=number min=0 max=9 class='scrollwheel_tune'>";
+		contents += "<input id=mhzm2 onwheel='mhzm(event, this)' size=1 type=number min=0 max=9 class='scrollwheel_tune'>.";
+		contents += "<input id=mhzm3 onwheel='mhzm(event, this)' size=1 type=number min=0 max=9 class='scrollwheel_tune'>";
+		contents += "<input id=mhzm4 onwheel='mhzm(event, this)' size=1 type=number min=0 max=9 class='scrollwheel_tune'>";
+		contents += "<input id=mhzm5 onwheel='mhzm(event, this)' size=1 type=number min=0 max=9 class='scrollwheel_tune'>,";
+		contents += "<input id=mhzm6 onwheel='mhzm(event, this)' size=1 type=number min=0 max=9 class='scrollwheel_tune'>";
+		contents += "<input id=mhzm7 onwheel='mhzm(event, this)' size=1 type=number min=0 max=9 class='scrollwheel_tune'>";
+		contents += "<input id=mhzm8 onwheel='mhzm(event, this)' size=1 type=number min=0 max=9 class='scrollwheel_tune'>,";
+		contents += "<input id=mhzm9 onwheel='mhzm(event, this)' size=1 type=number min=0 max=9 class='scrollwheel_tune'>";
+		contents += "</DIV></TD></TR></TABLE><BR>";
+		contents += "v Click in this row; <TABLE BORDER=1>";
+		contents += '<TR><TH>d\\h</div></TH>';
+		for( let h = 0|min_harmonics; h <= max_harmonics+1; h++ )
+		{
+			contents += "<TH COLSPAN=1>" + h + "</TH>";
+		}
+
+		for( let n = 0|42; n <= 96; n+=2 )
+		{
+			let freq = ( xtal / n );
+			let goertzelpoint = 0;
+			let goertzelpointinv = 0;
+			let tgoertzelp = 0;
+			let tgoertzelpi = 0;
+			let quantaA = 0;
+			let quantaINV = 0;
+
+			for( let rid = 0|0; rid < 2|0; rid++ )
+			{
+				contents += "<TR>";
+				for( let h = -2|min_harmonics; h <= max_harmonics; h++ )
+				{
+					let tquanta = (quanta&0xffffc);
+					let base = freq * h;
+					let next = freq * (h+1);
+
+					let tgoertzelpoint = tquanta;
+					tgoertzelpoint = ( target - base ) / ( next - base );
+					tgoertzelpoint = ((tgoertzelpoint%1)+1)%1;
+
+					quantaA = tquanta;
+					tgoertzelp = h;
+					if( h == -2 )
+					{
+						if( rid == 0 )
+						{
+							contents += "<TD COLSPAN=1 ROWSPAN=2>"
+							contents += "<INPUT TYPE=SUBMIT ONCLICK='Goertz(" + n + ", " + freq * (h+tgoertzelpoint) + ", " + (tgoertzelpoint) + ", " + quantaA + ", 1, " + target + " )' VALUE='↑" + n + "'/>";
+							contents += "</TD>"
+						}
+					}
+					else
+					{
+						if( rid == 0 )
+						{
+							contents += DrawSpan( 1, 1, freq * (h+tgoertzelpoint), target, true );
+						}
+						else
+						{
+							contents += DrawSpan( 1, 1, freq * (h-tgoertzelpoint), target, true );
+						}
+					}
+				}
+				contents += "</TR>";
+			}
+
+
+		}
+		contents += "</TABLE>";
+	}
+
+	document.getElementById( "TABLE" ).innerHTML = contents;
+}
+
+const savedFields = ["crystalmhz", "targetmhz", "quanta", "quantasearch", "toggle_adc_buffer", "g_attenuation_pow2"];
+
+function SaveDefaults()
+{
+	for( i in savedFields )
+	{
+		let f = savedFields[i];
+		let e = document.getElementById(f);
+		if( e )
+		{
+			localStorage.setItem( f, e.value );
+		}
+	}
+}
+
+function LoadDefaults()
+{
+	for( i in savedFields )
+	{
+		let f = savedFields[i];
+		let e = document.getElementById(f);
+		let v = localStorage.getItem( f );
+		console.log( `Loading: ${e} ${f} ${v}`);
+		if( e && v )
+		{
+			if( v == 'on' )
+				e.checked = true;
+			else if( v == 'off' )
+				e.checked = false;
+			else
+				e.value = v;
+		}
+	}	
+}
+
+function onLoad()
+{
+	LoadDefaults();
+	onLoadWebHidControl();
+}
+</SCRIPT>
+</HEAD>
+<BODY onLoad="onLoad()">
+<TABLE WIDTH=100%>
+<TR>
+<TD COLSPAN=2>
+<p>Tool for computing tuning to specific frequencies by use of direct ADC reading at specific timer-controlled rate to "tune" to specific frequencies either by quadrature or differential.</p>
+</TD>
+<TD ROWSPAN=2 VALIGN=TOP HEIGHT=200 WIDTH=100% ID=LiveGraphContainer>
+
+<CANVAS WIDTH=100% HEIGHT=200 ID=LiveGraph> </CANVAS>
+</TD>
+</TR>
+<TR>
+<TD VALIGN=TOP ROWSPAN=2>
+<TABLE WIDTH=380>
+<TR><TD>System Rate MHz</TD><TD><INPUT ID=crystalmhz VALUE=288></TD></TR>
+<TR><TD>Target MHz</TD><TD><INPUT ID=targetmhz VALUE=27.019360></TD></TR>
+<TR><TD>Quanta</TD><TD><INPUT ID=quanta VALUE=1024></TD></TR>
+<TR><TD>Quanta Search Range</TD><TD><INPUT ID=quantasearch VALUE=64></TD></TR>
+<TR><TD>Table Type</TD><TD>
+	<INPUT TYPE=RADIO ID=QUADRATURE NAME=computetype>Quadrature</INPUT><br>
+	<INPUT TYPE=RADIO ID=GOERTZELS NAME=computetype>Goertzels</INPUT><br>
+	<INPUT TYPE=RADIO ID=GOERTZEL2 NAME=computetype checked>Goertzel (unalign)</INPUT>
+</TD></TR>
+<TR><TD COLSPAN=2><INPUT TYPE=SUBMIT VALUE="Compute" ONCLICK="computeTable()"></TD></TR>
+</TABLE>
+</TD>
+<TD VALIGN=TOP ROWSPAN=2>
+Live Control:<br>
+<TABLE><TR>
+<TD><INPUT TYPE=SUBMIT onClick="reqConnect()" VALUE="Open Device" ID=connectButton>
+<INPUT TYPE=SUBMIT onClick="toggleAudio()" VALUE="Play Audio" ID="ToggleAudioButton">
+<INPUT TYPE=SUBMIT onClick="toggleAudioModulation()" VALUE="modulation" ID="ToggleAudioModulationButton">
+<DIV ID=STATUS></DIV></TD>
+</TR></TABLE>
+<DIV ID="StatusPerf"></DIV>
+</TD>
+<TD>
+</TD>
+</TR>
+<tr>
+<td>
+<div id=GeneralData></DIV>
+<input type=checkbox ID=toggle_adc_buffer onchange='toggleBuffer(this)'>ADC Buffer Enable
+<BR>Pow2 Attenuation: 
+<input id=g_attenuation_pow2 onwheel='attenuationpow2wheel(event, this)' size=3 type=number style="width:3em" value=3><br>
+</td>
+</tr>
+<tr><td>
+<DIV STYLE="position:relative">
+<DIV style="margin:0px;top:0px;position:absolute" ID=TABLE></DIV>
+</DIV>
+</td></tr>
+</TABLE>
+</BODY>
+</HTML>

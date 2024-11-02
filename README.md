@@ -1,25 +1,73 @@
 # LoLRa
 
-*Transmit 900MHz LoRa frames surprisingly far without a radio*
+Transmit 900MHz LoRa frames surprisingly far without a radio (And other radio shenanigans using ADCs, PWMs and I2S/SPI busses) including sending other RF data, as well as receiving RF signals (Though admittedly not a LoRa receiver).
 
- * [Introduction](#introduction)
- * [Background](#background)
- * [LoRaWAN](#lorawan)
- * [Limitations](#limitations)
- * [Future Work](#future-work)
- * [Resources](#resources)
- * [Special Thanks](#special-thanks)
- * [Range Tests](#range-tests)
+If you are looking for the Hackaday 2024 microcontroller radio talk, you can <a href=https://cnlohr.github.io/lolra_talk>click here</a>.
 
-## Introduction
+If you are looking for LoLRa Merch (Like t-shirts, etc.), <a href=https://cnlohr-shop.fourthwall.com/?source=dashboard>click here</a>.
 
-Firmware-only LoRa transmission, for a variety of processors. Send LoRa packets, without any radio, chips, external hardware or built-in radios at all on a variety of common, inexpensive processors. While not truly bit banging, this repository shows how using either a shift register (i.e. I2S or SPI port) or an APLL, you can send LoRa packets that can be decoded by commercial off the shelf LoRa gateways and other chips.
+ * [Introduct and repo overview](#introduction-and-repo-overview)
+ * LoRa
+   * [Introduction (LoRa)](#introduction-lora)
+   * [Background](#background)
+   * [LoRaWAN](#lorawan)
+   * [Limitations](#limitations)
+   * [Future Work](#future-work)
+   * [Resources](#resources)
+   * [Special Thanks](#special-thanks)
+   * [Range Tests](#range-tests)
 
 > [!NOTE]
-> This repo is designed for use with ITU Region 2 (The Americas) targeting 902-928MHz. Code changes are needed for use in Region 1 (EU, Russia, Africa) to target 863-870MHz or Region 3 (Australia, China, India) to target 920-923MHz.
+> 1. Portions of code in this repo are under various licenses and cannot be trivially incorporated into other libraries, including some files containing a no-ai-training license for any of the RF-specific portions of the project. Be cautious when using code from this repo. See ![LICENSE](LICENSE) for more information.
+> 2. The LoRa® and LoRaWAN® Mark and LoRa Logo are trademarks of Semtech Corporation.
+> 3. LoLRa is not associated with Semtech in any way whatsoever.
+> 4. This repo is designed for use with ITU Region 2 (The Americas) targeting 902-928MHz. Code changes are needed for use in Region 1 (EU, Russia, Africa) to target 863-870MHz or Region 3 (Australia, China, India) to target 920-923MHz.
 
 > [!CAUTION]
 > Because we rely on harmonics and aliasing, the primary frequency components emitted by your microcontroller are going to be in portions of the RF spectrum where RF transmissions are banned.  Please filter your output or perform your tests in an area where you are unlikely to leak significant RF.  The overall EIRP output is genreally ≪300uW across the whole spectrum spread out over hundreds of emission frequencies, but there is virtually no way a device deliberately transmitting on these frequencies could ever pass FCC part 15 compliance, even with filtering. 
+
+
+## Introduction and Repo Overview
+
+I have always been fascinated with sending and receiving radio signals from microcontrollers that don't have dedicated radio hardware.  This repo serves as a overview of many of the projects I've done to do this decoding, along with example code (Though some of it is restrictively licensed)
+
+In general the repo is split up in to many projects, but categoriezed by device type.
+
+ * ch32v (Note, all examples require 8MHz (v203) or 24Mhz (v003) crystal oscillator)
+   * General Note: All OLED displays used here are 128x128 SPI-mode OLED displays.
+   * [ch32v003-adcrx](ch32v/ch32v003-adcrx) - prints quadrature values for receiving at 1/4 sample rate signals, or harmonics thereof.  Specifically this is tuned to receiv CW on citizen band frequencies, specifically 27.000050 MHz
+   * [ch32v003-lora](ch32v/ch32v003-lora) - Successful (but very poor) transmission of LoRa messages with a ch32v003.
+   * [ch32v003-timer](ch32v/ch32v003-timer) - An attempt to use non-tabled dithering of PWM signals to send FM radio and/or 315MHz signals.  *This does not work well* but it is included as a reference for dtrying to dither RF on the 003. 
+   * [ch32v003-txrx](ch32v/ch32v003-txrx) - Trying to send from one 003 to another 003 receiving.  This does not work well - only about 1'.
+   * [ch32v203-adcrx](ch32v203-adcrx) - Very basic quadrature decoding on a ch32v203.
+   * [ch32v203-fft](ch32v203-fft) - Perform an FFT on a small window of samples on a ch32v203.  This outputs to an OLED display.  It doesn't keep up in realtime though.  It also relies on <a href=https://gist.github.com/cnlohr/c4f9647a220781c005ff1a733dc9ed7f>fix_fft.h</a> (which cannot be distirbuted with this project because of a lack of license.
+   * [**ch32v203-goertzel**](ch32v/ch32v203-goertzel) - Perform a full goertzel's tuning on an incoming ADC signal so that it can listen to multiple AM and NBFM radio stations from an ADC pin.
+     * [lib/calculator.html](ch32v/lib/calculator.html) - webpage that can use webhid with ch32v203-goertzel.
+   * [**ch32v203-lora**](ch32v/ch32v203-lora) - Proper transmission of LoRaWAN packets (from the tests outlined below).
+   * [ch32v203-tx](ch32v/ch32v203-tx) - Very basic test, setup to just turn on a PWM on the ch32v203.
+ * esp32-s2
+   * [**loratest**](esp32-s2/loratest) - Full stack protocol for sending LoRa messages from an esp32-s2. (From range test)
+   * [**narrow_fsk_test**](esp32-s2/narrow_fsk_test) - Very basic test using dithering and the PLL in the esp32-s2 to see how tight/narrow control is possible with the esp32-s2.  This does not do a dithered closed loop, but would not be terribly hard to add.
+   * [**videoending**](esp32-s2/videoending) - Mechanism for allowing an ESP32-S2 to FSK, hopping around to draw a picture in a spectrogram.  This was used for the video ending.
+ * esp8266
+   * [example_125k_raw](esp8266/example_125k_raw) - Sending a raw 125kHz wide LoRa message.
+   * [example_500k_raw](esp8266/example_500k_raw) - Sending a raw 500kHz wide LoRa message.
+   * [**lorawan_example**](esp8266/lorawan_example) - Using the I2S bus on the ESP8266 to send a full-stack LoRaWAN message to the things network.
+   * [non_lora_310_transmit](esp8266/non_lora_310_transmit) - Exmaple of how to transmit 310MHz OOK with an ESP8266.
+ * lib
+   * [aes-cbc-cmac.h](lib/aes-cbc-cmac.h) - Public Domain RFC4493 AES-CMAC header only library.
+   * [LoRa-SDR-Code.h](lib/LoRa-SDR-Code.h) - MIT (unrestrictive) Licensed code to construct LoRa packets
+   * [lorawan_simple.h](lib/lorawan_simple.h) - MIT (unrestrictive) Licensed code to construct LoRaWAN packets.
+   * [rf_data_gen.h](lib/rf_data_gen.h) - Helper function for helping generate bit tables for I2S/SPI outpiut of carefully crafted signals.
+   * [tiny-AES-c.h](lib/rf_data_gen.h) - Public Domain AES encryption/decryption library.
+ * tools
+   * [60-rtlsdr.rules](tools/60-rtlsdr.rules) - Make it so you can use your airspy from Linux as a user.
+   * [complex_magsink_to_image.c](tools/complex_magsink_to_image.c) - Generate ultra high resolution (in time domain) waterfall views.
+   * [testloradec.grc](tools/testloradec.grc) - Using gr_lora exmaple to decode LoRa in GNURadio
+
+## Introduction (LoRa)
+
+Firmware-only LoRa transmission, for a variety of processors. Send LoRa packets, without any radio, chips, external hardware or built-in radios at all on a variety of common, inexpensive processors. While not truly bit banging, this repository shows how using either a shift register (i.e. I2S or SPI port) or an APLL, you can send LoRa packets that can be decoded by commercial off the shelf LoRa gateways and other chips.
 
 There are two major modes that this repository works with.
 
@@ -30,9 +78,6 @@ There are two major modes that this repository works with.
 Click Below for the Youtube Video version of this page:
 
 [![LoRa Without A Radio](https://i3.ytimg.com/vi/eIdHBDSQHyw/maxresdefault.jpg)](https://www.youtube.com/watch?v=eIdHBDSQHyw)
-
-> [!NOTE]
-> Portions of code in this repo are under various licenses and cannot be trivially incorporated into other libraries without a bit of a mess, including a no-ai-training license for any of the RF-specific portions of the project. Be cautious when using code from this repo. See ![LICENSE](LICENSE) for more information.
 
 ## Background
 
@@ -93,11 +138,11 @@ While LoRa can be used with many different channel widths, 125kHz and 500kHz are
 ![Bitstream Analysis](resources/bitstreamdiagram.png)
 
 This diagram shows frequency on the X axis, and time on the Y axis (top to bottom)... You can see:
- * **𝔸** our output on a platform like the CH32V203 is not perfect, that's because the SPI bus on the CH32V203 glitches by parts of a bit here and there.  This causes other, weaker images in the output. But, largely we can produce totally valid and readable (at a long distance) LoRa packets. 
- * **𝔹** LoRa consists of several upchirps some in a preamble.
+ * **�** our output on a platform like the CH32V203 is not perfect, that's because the SPI bus on the CH32V203 glitches by parts of a bit here and there.  This causes other, weaker images in the output. But, largely we can produce totally valid and readable (at a long distance) LoRa packets. 
+ * **�** LoRa consists of several upchirps some in a preamble.
  * **ℂ** two more upchirps with a phase offset indicating a sync word if we select 0x43 (or 0x34 depending on endian) for the upchirps here, our packets will be decoded and potentially forwarded by commercial LoRa gateways.
- * **𝔻** 2.25 down chrips in. That extra .25 causes some pain 😈 (the minimum logical unit is a quarter chirp, not a whole chirp). 
- * Then a payload where each upchirp is offset by a phase to convey information in **𝔼**. 
+ * **�** 2.25 down chrips in. That extra .25 causes some pain � (the minimum logical unit is a quarter chirp, not a whole chirp). 
+ * Then a payload where each upchirp is offset by a phase to convey information in **�**. 
  
 Conveniently the window for a given chirp is stable depending on the spreading factor.  For the above packet, with SF7, it works out to 1,024us per symbol, or for SF8, 2,048us per symbol.  Each symbol/chirp can represent a number of bits, by a phase offset.
 
@@ -259,4 +304,5 @@ Low Overhead Radios Using Side-Channels](https://dl.acm.org/doi/abs/10.1145/3583
  * Several other folks in my discord for review work and editing work on this page
  * My girlfriend for testing help and auxiliary camera work
  * Everyone who helped out with my various open source projects
+
 
