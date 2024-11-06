@@ -298,6 +298,13 @@ Low Overhead Radios Using Side-Channels](https://dl.acm.org/doi/abs/10.1145/3583
  * [Airspy Mini SDR](https://v3.airspy.us/product/a-airspy-mini/)
  * [LILYGO® T-Beam Meshtastic](https://www.lilygo.cc/products/t-beam-v1-1-esp32-lora-module)
 
+### LoLRa Like Things
+ * [Wirelessly control 49 MHz toy with I/O line flipping on Pi Pico](https://www.youtube.com/watch?v=K-6dos8Hvm8)
+
+### Other Interesting Radio Links
+
+ * [Radio station snafu in Seattle bricks some Mazda infotainment systems](https://arstechnica.com/cars/2022/02/radio-station-snafu-in-seattle-bricks-some-mazda-infotainment-systems/)
+
 ## Special Thanks
  * @MustardTiger for a crazy amount of support work in this project
  * Willmore for the editing work
