@@ -9,6 +9,9 @@ EXTRA_CFLAGS:=-I../rv003usb/lib -I../rv003usb/rv003usb -mstrict-align -Wno-unuse
 
 include ../ch32v003fun/ch32v003fun/ch32v003fun.mk
 
+programmerclock :
+	$(MINICHLINK)/minichlink -X ECLK 1:0:0:8:3
+
 flash : cv_flash
 clean : cv_clean
 	rm -rf rf_data_gen chirpbuff.dat chirpbuff.h chirpbuffinfo.h

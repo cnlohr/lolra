@@ -68,7 +68,6 @@ volatile uint16_t adc_buffer[ADC_BUFFSIZE];
 
 void SetupADC()
 {
-	
 	// Reset the ADC to init all regs
 	RCC->APB2PRSTR |= RCC_APB2Periph_ADC1;
 	RCC->APB2PRSTR &= ~RCC_APB2Periph_ADC1;
@@ -277,25 +276,17 @@ int main()
 
 	SetupADC();
 
-
-#if 0
-	// turn on the op-amp
-	EXTEN->EXTEN_CTR |= EXTEN_OPA_EN;
-
-	// select op-amp pos pin: 0 = PA2, 1 = PD7
-	EXTEN->EXTEN_CTR |= EXTEN_OPA_PSEL;
-
-	// select op-amp neg pin: 0 = PA1, 1 = PD0
-	EXTEN->EXTEN_CTR |= EXTEN_OPA_NSEL;
-#endif
-
-
+	while(1)
 	printf( "ADC Setup\n" );
 
-	SetupTimer1();
+#if 0
+	EXTEN->EXTEN_CTR |= EXTEN_OPA_EN;          // turn on the op-amp
+	EXTEN->EXTEN_CTR |= EXTEN_OPA_PSEL;        // select op-amp pos pin: 0 = PA2, 1 = PD7
+	EXTEN->EXTEN_CTR |= EXTEN_OPA_NSEL;        // select op-amp neg pin: 0 = PA1, 1 = PD0
+#endif
 
+//	SetupTimer1();
 	printf( "Timer 1 setup\n" );
-
 	InnerLoop();
 }
 
