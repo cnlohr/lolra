@@ -2,6 +2,7 @@ all : flash
 
 TARGET:=loratest
 TARGET_MCU:=CH32V203
+TARGET_MCU_PACKAGE:=C8
 CH32V003FUN:=../ch32v003fun/ch32v003fun
 
 EXTRA_ELF_DEPENDENCIES:=chirpbuff.h
